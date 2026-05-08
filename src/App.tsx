@@ -10,6 +10,14 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 type GamePhase = 'idle' | 'running' | 'gameover'
+type AppTab = 'play' | 'top'
+type TxStatus = 'idle' | 'pending' | 'sent' | 'error'
+
+type LeaderboardEntry = {
+  player: string
+  bestScore: number
+  updatedAt: number
+}
 
 type Pipe = {
   x: number
@@ -28,12 +36,59 @@ const PIPE_SPEED = 2.8
 const FLAP_FORCE = -6.9
 const GRAVITY = 0.4
 const BEST_SCORE_KEY = 'happy-bird-ton-best-score'
+const LEADERBOARD_KEY = 'happy-bird-ton-leaderboard'
 
 function getStoredBestScore() {
   const storedBest = window.localStorage.getItem(BEST_SCORE_KEY)
   const parsedBest = storedBest ? Number.parseInt(storedBest, 10) : 0
 
   return Number.isNaN(parsedBest) ? 0 : parsedBest
+}
+
+function getStoredLeaderboard() {
+  const stored = window.localStorage.getItem(LEADERBOARD_KEY)
+
+  if (!stored) {
+    return [] as LeaderboardEntry[]
+  }
+
+  try {
+    const parsed = JSON.parse(stored)
+
+    if (!Array.isArray(parsed)) {
+      return [] as LeaderboardEntry[]
+    }
+
+    return parsed
+      .filter((item): item is LeaderboardEntry => {
+        return (
+          typeof item === 'object' &&
+          item !== null &&
+          typeof item.player === 'string' &&
+          typeof item.bestScore === 'number' &&
+          typeof item.updatedAt === 'number'
+        )
+      })
+      .sort((a, b) => b.bestScore - a.bestScore || b.updatedAt - a.updatedAt)
+  } catch {
+    return [] as LeaderboardEntry[]
+  }
+}
+
+function saveLeaderboard(entries: LeaderboardEntry[]) {
+  window.localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries))
+}
+
+function shortAddress(address: string) {
+  if (address.length <= 12) {
+    return address
+  }
+
+  return `${address.slice(0, 6)}...${address.slice(-4)}`
+}
+
+function getSpeedMultiplier(score: number) {
+  return 1 + Math.min(score, 80) * 0.025
 }
 
 function randomPipeY() {
@@ -151,9 +206,11 @@ function drawScene(
 
 function App() {
   const initialBestScore = getStoredBestScore()
+  const initialLeaderboard = getStoredLeaderboard()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const bestScoreRef = useRef(initialBestScore)
+  const playerNameRef = useRef('Guest pilot')
   const controlsRef = useRef({
     flap: () => {},
     restart: () => {},
@@ -176,8 +233,10 @@ function App() {
   const [tonConnectUI] = useTonConnectUI()
   const [score, setScore] = useState(0)
   const [bestScore, setBestScore] = useState(initialBestScore)
+  const [leaderboard, setLeaderboard] = useState(initialLeaderboard)
   const [gamePhase, setGamePhase] = useState<GamePhase>('idle')
-  const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'sent' | 'error'>('idle')
+  const [txStatus, setTxStatus] = useState<TxStatus>('idle')
+  const [activeTab, setActiveTab] = useState<AppTab>('play')
 
   const isTestnetWallet = wallet?.account.chain === CHAIN.TESTNET
 
@@ -211,7 +270,14 @@ function App() {
   const telegramUser =
     telegramWebApp?.initDataUnsafe?.user?.first_name ||
     telegramWebApp?.initDataUnsafe?.user?.username ||
-    'Guest pilot'
+    (walletAddress ? `Pilot ${shortAddress(walletAddress)}` : 'Guest pilot')
+  const playersCount = leaderboard.length
+  const topPlayer = leaderboard[0]
+  const speedMultiplier = getSpeedMultiplier(score)
+
+  useEffect(() => {
+    playerNameRef.current = telegramUser
+  }, [telegramUser])
 
   useEffect(() => {
     const webApp = telegramWebApp
@@ -250,6 +316,35 @@ function App() {
       setBestScore(nextScore)
     }
 
+    const syncLeaderboard = (nextScore: number) => {
+      if (nextScore <= 0) {
+        return
+      }
+
+      setLeaderboard((previous) => {
+        const now = Date.now()
+        const player = playerNameRef.current
+        const existing = previous.find((entry) => entry.player === player)
+
+        if (existing && existing.bestScore >= nextScore) {
+          return previous
+        }
+
+        const updated = existing
+          ? previous.map((entry) =>
+              entry.player === player
+                ? { ...entry, bestScore: nextScore, updatedAt: now }
+                : entry,
+            )
+          : [...previous, { player, bestScore: nextScore, updatedAt: now }]
+
+        updated.sort((a, b) => b.bestScore - a.bestScore || b.updatedAt - a.updatedAt)
+        saveLeaderboard(updated)
+
+        return updated
+      })
+    }
+
     const resetGame = (phase: GamePhase) => {
       gameRef.current = {
         birdY: CANVAS_HEIGHT / 2 - 30,
@@ -271,6 +366,7 @@ function App() {
 
       current.phase = 'gameover'
       syncBestScore(current.score)
+      syncLeaderboard(current.score)
       setGamePhase('gameover')
     }
 
@@ -322,9 +418,11 @@ function App() {
       current.lastTime = timestamp
 
       if (current.phase === 'running') {
-        current.birdVelocity += GRAVITY * delta
+        const pace = getSpeedMultiplier(current.score)
+
+        current.birdVelocity += GRAVITY * pace * delta
         current.birdY += current.birdVelocity * delta
-        current.spawnTimer += delta
+        current.spawnTimer += pace * delta
 
         if (current.spawnTimer >= 90) {
           current.pipes.push(createPipe())
@@ -332,7 +430,7 @@ function App() {
         }
 
         for (const pipe of current.pipes) {
-          pipe.x -= PIPE_SPEED * delta
+          pipe.x -= PIPE_SPEED * pace * delta
 
           if (!pipe.passed && pipe.x + PIPE_WIDTH < BIRD_X) {
             pipe.passed = true
@@ -386,146 +484,201 @@ function App() {
 
   return (
     <main className="app-shell">
-      <section className="hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">Telegram Mini App x TON Testnet</p>
-          <h1>Happy Bird</h1>
-          <p className="lede">
-            A lightweight flappy-style game built to run inside Telegram, with
-            TON wallet connectivity ready for testnet missions.
-          </p>
-        </div>
+      <div className="content-shell">
+        {activeTab === 'play' ? (
+          <>
+            <section className="hero-panel">
+              <div className="hero-copy">
+                <p className="eyebrow">Telegram Mini App x TON Testnet</p>
+                <h1>Happy Bird</h1>
+                <p className="lede">
+                  Cang bay cao diem cang lon, toc do cang nhanh. Khong gioi han
+                  diem, chi ket thuc khi va cham.
+                </p>
+              </div>
 
-        <div className="hero-actions">
-          <TonConnectButton className="wallet-button" />
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => controlsRef.current.restart()}
-          >
-            Reset run
-          </button>
-        </div>
-      </section>
+              <div className="hero-actions">
+                <TonConnectButton className="wallet-button" />
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => controlsRef.current.restart()}
+                >
+                  Reset run
+                </button>
+              </div>
+            </section>
 
-      <section className="status-grid">
-        <article className="status-card">
-          <span className="card-label">Telegram</span>
-          <strong>{telegramReady ? 'Connected' : 'Browser preview'}</strong>
-          <p>
-            {telegramReady
-              ? `${telegramUser} on ${telegramPlatform}`
-              : 'The app still works in the browser, but WebApp controls activate inside Telegram.'}
-          </p>
-        </article>
+            <section className="status-grid">
+              <article className="status-card">
+                <span className="card-label">Telegram</span>
+                <strong>{telegramReady ? 'Connected' : 'Browser preview'}</strong>
+                <p>
+                  {telegramReady
+                    ? `${telegramUser} on ${telegramPlatform}`
+                    : 'The app works in browser, but full controls activate inside Telegram.'}
+                </p>
+              </article>
 
-        <article className="status-card">
-          <span className="card-label">TON Wallet</span>
-          <strong>
-            {!isConnectionRestored
-              ? 'Restoring session...'
-              : wallet
-                ? isTestnetWallet
-                  ? 'TON Testnet ready'
-                  : 'Wrong network'
-                : 'No wallet connected'}
-          </strong>
-          <p>
-            {wallet
-              ? walletAddress
-              : 'Connect a testnet wallet to use future reward, leaderboard, or item purchase flows.'}
-          </p>
-        </article>
+              <article className="status-card">
+                <span className="card-label">TON Wallet</span>
+                <strong>
+                  {!isConnectionRestored
+                    ? 'Restoring session...'
+                    : wallet
+                      ? isTestnetWallet
+                        ? 'TON Testnet ready'
+                        : 'Wrong network'
+                      : 'No wallet connected'}
+                </strong>
+                <p>
+                  {wallet
+                    ? walletAddress
+                    : 'Connect testnet wallet to unlock reward and score submissions.'}
+                </p>
+              </article>
 
-        <article className="status-card accent-card">
-          <span className="card-label">Session</span>
-          <strong>
-            {gamePhase === 'running'
-              ? 'Flight in progress'
-              : gamePhase === 'gameover'
-                ? 'Try again'
-                : 'Ready for takeoff'}
-          </strong>
-          <p>
-            Score {score} · Best {bestScore}
-          </p>
-        </article>
-      </section>
+              <article className="status-card accent-card">
+                <span className="card-label">Session</span>
+                <strong>
+                  {gamePhase === 'running'
+                    ? 'Flight in progress'
+                    : gamePhase === 'gameover'
+                      ? 'Try again'
+                      : 'Ready for takeoff'}
+                </strong>
+                <p>
+                  Score {score} · Best {bestScore} · Speed x{speedMultiplier.toFixed(2)}
+                </p>
+              </article>
 
-      <section className="playground">
-        <div className="game-panel">
-          <div className="panel-header">
-            <div>
-              <span className="card-label">Game</span>
-              <h2>Fly the bird</h2>
+              <article className="status-card">
+                <span className="card-label">Community</span>
+                <strong>{playersCount} players</strong>
+                <p>
+                  Top: {topPlayer ? `${topPlayer.player} (${topPlayer.bestScore})` : 'No score yet'}
+                </p>
+              </article>
+            </section>
+
+            <section className="playground">
+              <div className="game-panel">
+                <div className="panel-header">
+                  <div>
+                    <span className="card-label">Game</span>
+                    <h2>Fly the bird</h2>
+                  </div>
+                  <p>Tap the game area or press Space.</p>
+                </div>
+
+                <div className="canvas-shell">
+                  <canvas
+                    ref={canvasRef}
+                    className="game-canvas"
+                    width={CANVAS_WIDTH}
+                    height={CANVAS_HEIGHT}
+                    aria-label="Happy Bird game canvas"
+                  />
+                </div>
+              </div>
+
+              <aside className="side-panel">
+                <article className="info-card">
+                  <span className="card-label">Leaderboard preview</span>
+                  <h3>Top score outside Top tab</h3>
+                  <p>
+                    {topPlayer
+                      ? `${topPlayer.player} is leading with ${topPlayer.bestScore} points.`
+                      : 'No player has posted a score yet.'}
+                  </p>
+                </article>
+
+                <article className="info-card">
+                  <span className="card-label">Difficulty scaling</span>
+                  <h3>Speed increases with score</h3>
+                  <p>
+                    Every point increases game pace. The higher your score, the faster the bird flow.
+                  </p>
+                </article>
+
+                {gamePhase === 'gameover' && isTestnetWallet && (
+                  <article className="info-card reward-card">
+                    <span className="card-label">On-chain</span>
+                    <h3>Submit score</h3>
+                    <p>Score {score} - record it on TON Testnet.</p>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={handleSubmitScore}
+                      disabled={txStatus === 'pending' || txStatus === 'sent'}
+                    >
+                      {txStatus === 'pending'
+                        ? 'Sending...'
+                        : txStatus === 'sent'
+                          ? 'Score submitted'
+                          : txStatus === 'error'
+                            ? 'Retry'
+                            : 'Submit score on-chain'}
+                    </button>
+                    {txStatus === 'error' && (
+                      <p className="tx-error">Transaction failed. Try again.</p>
+                    )}
+                  </article>
+                )}
+              </aside>
+            </section>
+          </>
+        ) : (
+          <section className="top-page">
+            <div className="top-head">
+              <p className="eyebrow">Top Players</p>
+              <h2>Leaderboard</h2>
+              <p>
+                Tong nguoi choi: <strong>{playersCount}</strong>
+              </p>
             </div>
-            <p>Tap the game area or press Space.</p>
-          </div>
 
-          <div className="canvas-shell">
-            <canvas
-              ref={canvasRef}
-              className="game-canvas"
-              width={CANVAS_WIDTH}
-              height={CANVAS_HEIGHT}
-              aria-label="Happy Bird game canvas"
-            />
-          </div>
-        </div>
+            {leaderboard.length > 0 ? (
+              <ol className="leaderboard-list">
+                {leaderboard.map((entry, index) => (
+                  <li key={entry.player} className="leaderboard-item">
+                    <span className="leader-rank">#{index + 1}</span>
+                    <div className="leader-meta">
+                      <strong>{entry.player}</strong>
+                      <p>{new Date(entry.updatedAt).toLocaleString()}</p>
+                    </div>
+                    <span className="leader-score">{entry.bestScore}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <article className="info-card">
+                <span className="card-label">No data</span>
+                <h3>Leaderboard is empty</h3>
+                <p>Play a run to create the first score.</p>
+              </article>
+            )}
+          </section>
+        )}
+      </div>
 
-        <aside className="side-panel">
-          <article className="info-card">
-            <span className="card-label">Gameplay loop</span>
-            <h3>Fast MVP for Telegram</h3>
-            <p>
-              The current build focuses on one-touch gameplay, local best score
-              storage, Telegram WebApp detection, and TON testnet onboarding.
-            </p>
-          </article>
-
-          <article className="info-card">
-            <span className="card-label">Testnet note</span>
-            <h3>Use a testnet wallet</h3>
-            <p>
-              The UI flags mainnet wallets so you can keep development and
-              reward testing isolated from real funds.
-            </p>
-          </article>
-
-          {gamePhase === 'gameover' && isTestnetWallet && (
-            <article className="info-card reward-card">
-              <span className="card-label">On-chain</span>
-              <h3>Submit score</h3>
-              <p>Score {score} — record it on TON Testnet.</p>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={handleSubmitScore}
-                disabled={txStatus === 'pending' || txStatus === 'sent'}
-              >
-                {txStatus === 'pending'
-                  ? 'Sending…'
-                  : txStatus === 'sent'
-                    ? '✓ Score submitted'
-                    : txStatus === 'error'
-                      ? 'Retry'
-                      : 'Submit score on-chain'}
-              </button>
-              {txStatus === 'error' && (
-                <p className="tx-error">Transaction failed. Try again.</p>
-              )}
-            </article>
-          )}
-
-          <article className="info-card info-card--compact">
-            <span className="card-label">Next upgrade</span>
-            <p>
-              Add on-chain score submissions, NFT skins, or tokenized entry fees
-              once your bot URL and public manifest are deployed.
-            </p>
-          </article>
-        </aside>
-      </section>
+      <nav className="bottom-tabs" aria-label="Main navigation">
+        <button
+          type="button"
+          className={`tab-button tab-top ${activeTab === 'top' ? 'active' : ''}`}
+          onClick={() => setActiveTab('top')}
+        >
+          Top
+        </button>
+        <button
+          type="button"
+          className={`tab-button tab-play ${activeTab === 'play' ? 'active' : ''}`}
+          onClick={() => setActiveTab('play')}
+        >
+          Play
+        </button>
+        <div className="tab-spacer" aria-hidden="true" />
+      </nav>
     </main>
   )
 }
