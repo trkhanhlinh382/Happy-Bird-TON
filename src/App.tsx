@@ -10,8 +10,9 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 type GamePhase = 'idle' | 'running' | 'gameover'
-type AppTab = 'play' | 'top'
+type AppTab = 'play' | 'top' | 'info'
 type TxStatus = 'idle' | 'pending' | 'sent' | 'error'
+type GameoverPopup = 'record' | 'gameover' | null
 
 type LeaderboardEntry = {
   player: string
@@ -237,6 +238,7 @@ function App() {
   const [gamePhase, setGamePhase] = useState<GamePhase>('idle')
   const [txStatus, setTxStatus] = useState<TxStatus>('idle')
   const [activeTab, setActiveTab] = useState<AppTab>('play')
+  const [gameoverPopup, setGameoverPopup] = useState<GameoverPopup>(null)
 
   const isTestnetWallet = wallet?.account.chain === CHAIN.TESTNET
 
@@ -359,14 +361,22 @@ function App() {
       setScore(0)
       setGamePhase(phase)
       setTxStatus('idle')
+      setGameoverPopup(null)
     }
 
     const endRun = () => {
       const current = gameRef.current
 
+      if (current.phase === 'gameover') {
+        return
+      }
+
+      const isNewRecord = current.score > bestScoreRef.current
+
       current.phase = 'gameover'
       syncBestScore(current.score)
       syncLeaderboard(current.score)
+      setGameoverPopup(isNewRecord ? 'record' : 'gameover')
       setGamePhase('gameover')
     }
 
@@ -486,149 +496,48 @@ function App() {
     <main className="app-shell">
       <div className="content-shell">
         {activeTab === 'play' ? (
-          <>
-            <section className="hero-panel">
-              <div className="hero-copy">
-                <p className="eyebrow">Telegram Mini App x TON Testnet</p>
-                <h1>Happy Bird</h1>
-                <p className="lede">
-                  Cang bay cao diem cang lon, toc do cang nhanh. Khong gioi han
-                  diem, chi ket thuc khi va cham.
-                </p>
+          <section className="play-page">
+            <div className="play-hud">
+              <span>Score {score}</span>
+              <span>Best {bestScore}</span>
+              <span>Speed x{speedMultiplier.toFixed(2)}</span>
+            </div>
+            <div className="game-panel game-panel--full">
+              <div className="canvas-shell">
+                <canvas
+                  ref={canvasRef}
+                  className="game-canvas"
+                  width={CANVAS_WIDTH}
+                  height={CANVAS_HEIGHT}
+                  aria-label="Happy Bird game canvas"
+                />
               </div>
 
-              <div className="hero-actions">
-                <TonConnectButton className="wallet-button" />
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => controlsRef.current.restart()}
-                >
-                  Reset run
-                </button>
-              </div>
-            </section>
-
-            <section className="status-grid">
-              <article className="status-card">
-                <span className="card-label">Telegram</span>
-                <strong>{telegramReady ? 'Connected' : 'Browser preview'}</strong>
-                <p>
-                  {telegramReady
-                    ? `${telegramUser} on ${telegramPlatform}`
-                    : 'The app works in browser, but full controls activate inside Telegram.'}
-                </p>
-              </article>
-
-              <article className="status-card">
-                <span className="card-label">TON Wallet</span>
-                <strong>
-                  {!isConnectionRestored
-                    ? 'Restoring session...'
-                    : wallet
-                      ? isTestnetWallet
-                        ? 'TON Testnet ready'
-                        : 'Wrong network'
-                      : 'No wallet connected'}
-                </strong>
-                <p>
-                  {wallet
-                    ? walletAddress
-                    : 'Connect testnet wallet to unlock reward and score submissions.'}
-                </p>
-              </article>
-
-              <article className="status-card accent-card">
-                <span className="card-label">Session</span>
-                <strong>
-                  {gamePhase === 'running'
-                    ? 'Flight in progress'
-                    : gamePhase === 'gameover'
-                      ? 'Try again'
-                      : 'Ready for takeoff'}
-                </strong>
-                <p>
-                  Score {score} · Best {bestScore} · Speed x{speedMultiplier.toFixed(2)}
-                </p>
-              </article>
-
-              <article className="status-card">
-                <span className="card-label">Community</span>
-                <strong>{playersCount} players</strong>
-                <p>
-                  Top: {topPlayer ? `${topPlayer.player} (${topPlayer.bestScore})` : 'No score yet'}
-                </p>
-              </article>
-            </section>
-
-            <section className="playground">
-              <div className="game-panel">
-                <div className="panel-header">
-                  <div>
-                    <span className="card-label">Game</span>
-                    <h2>Fly the bird</h2>
-                  </div>
-                  <p>Tap the game area or press Space.</p>
-                </div>
-
-                <div className="canvas-shell">
-                  <canvas
-                    ref={canvasRef}
-                    className="game-canvas"
-                    width={CANVAS_WIDTH}
-                    height={CANVAS_HEIGHT}
-                    aria-label="Happy Bird game canvas"
-                  />
-                </div>
-              </div>
-
-              <aside className="side-panel">
-                <article className="info-card">
-                  <span className="card-label">Leaderboard preview</span>
-                  <h3>Top score outside Top tab</h3>
-                  <p>
-                    {topPlayer
-                      ? `${topPlayer.player} is leading with ${topPlayer.bestScore} points.`
-                      : 'No player has posted a score yet.'}
+              {gamePhase === 'gameover' && gameoverPopup && (
+                <div className="gameover-popup" role="dialog" aria-live="polite">
+                  <p className="gameover-popup-tag">
+                    {gameoverPopup === 'record' ? 'NEW RECORD' : 'GAME OVER'}
                   </p>
-                </article>
-
-                <article className="info-card">
-                  <span className="card-label">Difficulty scaling</span>
-                  <h3>Speed increases with score</h3>
+                  <h3>
+                    {gameoverPopup === 'record'
+                      ? 'Thiet lap ky luc moi!'
+                      : 'Ban da thua, thu lai nao!'}
+                  </h3>
                   <p>
-                    Every point increases game pace. The higher your score, the faster the bird flow.
+                    Score {score} · Best {bestScore}
                   </p>
-                </article>
-
-                {gamePhase === 'gameover' && isTestnetWallet && (
-                  <article className="info-card reward-card">
-                    <span className="card-label">On-chain</span>
-                    <h3>Submit score</h3>
-                    <p>Score {score} - record it on TON Testnet.</p>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={handleSubmitScore}
-                      disabled={txStatus === 'pending' || txStatus === 'sent'}
-                    >
-                      {txStatus === 'pending'
-                        ? 'Sending...'
-                        : txStatus === 'sent'
-                          ? 'Score submitted'
-                          : txStatus === 'error'
-                            ? 'Retry'
-                            : 'Submit score on-chain'}
-                    </button>
-                    {txStatus === 'error' && (
-                      <p className="tx-error">Transaction failed. Try again.</p>
-                    )}
-                  </article>
-                )}
-              </aside>
-            </section>
-          </>
-        ) : (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => controlsRef.current.flap()}
+                  >
+                    Choi lai
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+        ) : activeTab === 'top' ? (
           <section className="top-page">
             <div className="top-head">
               <p className="eyebrow">Top Players</p>
@@ -659,6 +568,72 @@ function App() {
               </article>
             )}
           </section>
+        ) : (
+          <section className="info-page">
+            <article className="info-card">
+              <span className="card-label">Game Info</span>
+              <h3>Happy Bird TON</h3>
+              <p>
+                Cang choi lau, toc do game cang tang theo diem. Van choi chi
+                ket thuc khi va cham.
+              </p>
+            </article>
+
+            <article className="info-card">
+              <span className="card-label">Wallet</span>
+              <h3>TON connection</h3>
+              <TonConnectButton className="wallet-button" />
+              <p>
+                {!isConnectionRestored
+                  ? 'Restoring session...'
+                  : wallet
+                    ? isTestnetWallet
+                      ? `Testnet ready: ${walletAddress}`
+                      : 'Wrong network. Switch wallet to TON Testnet.'
+                    : 'Connect testnet wallet to unlock on-chain score submit.'}
+              </p>
+            </article>
+
+            <article className="info-card">
+              <span className="card-label">Community</span>
+              <h3>Players and top score</h3>
+              <p>
+                Players: {playersCount}
+                <br />
+                Top: {topPlayer ? `${topPlayer.player} (${topPlayer.bestScore})` : 'No score yet'}
+              </p>
+              <p>
+                {telegramReady
+                  ? `${telegramUser} on ${telegramPlatform}`
+                  : 'Open inside Telegram for full Mini App experience.'}
+              </p>
+            </article>
+
+            {gamePhase === 'gameover' && isTestnetWallet && (
+              <article className="info-card reward-card">
+                <span className="card-label">On-chain</span>
+                <h3>Submit score</h3>
+                <p>Score {score} - record it on TON Testnet.</p>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleSubmitScore}
+                  disabled={txStatus === 'pending' || txStatus === 'sent'}
+                >
+                  {txStatus === 'pending'
+                    ? 'Sending...'
+                    : txStatus === 'sent'
+                      ? 'Score submitted'
+                      : txStatus === 'error'
+                        ? 'Retry'
+                        : 'Submit score on-chain'}
+                </button>
+                {txStatus === 'error' && (
+                  <p className="tx-error">Transaction failed. Try again.</p>
+                )}
+              </article>
+            )}
+          </section>
         )}
       </div>
 
@@ -673,11 +648,20 @@ function App() {
         <button
           type="button"
           className={`tab-button tab-play ${activeTab === 'play' ? 'active' : ''}`}
-          onClick={() => setActiveTab('play')}
+          onClick={() => {
+            setActiveTab('play')
+            controlsRef.current.flap()
+          }}
         >
           Play
         </button>
-        <div className="tab-spacer" aria-hidden="true" />
+        <button
+          type="button"
+          className={`tab-button tab-info ${activeTab === 'info' ? 'active' : ''}`}
+          onClick={() => setActiveTab('info')}
+        >
+          Info
+        </button>
       </nav>
     </main>
   )

@@ -1,12 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Chakra+Petch:wght@600;700&display=swap');
+
 :root {
-  font-family: 'Trebuchet MS', 'Avenir Next', 'Segoe UI', sans-serif;
+  --bg-deep: #0b2b32;
+  --bg-mid: #124651;
+  --bg-warm: #f3b562;
+  --text-main: #fefcf7;
+  --text-muted: #d8e4df;
+  --panel: rgba(255, 251, 237, 0.9);
+  --panel-stroke: rgba(255, 255, 255, 0.36);
+  --panel-shadow: 0 30px 80px rgba(7, 18, 17, 0.35);
+  font-family: 'Sora', 'Avenir Next', 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #2f2a1f;
+  color: var(--text-main);
   background:
-    radial-gradient(circle at top left, rgba(255, 247, 211, 0.92), transparent 34%),
-    radial-gradient(circle at 85% 18%, rgba(255, 211, 124, 0.7), transparent 18%),
-    linear-gradient(180deg, #f7e7c2 0%, #efc47d 100%);
+    radial-gradient(circle at 15% 6%, rgba(255, 233, 174, 0.3), transparent 34%),
+    radial-gradient(circle at 92% 24%, rgba(116, 205, 214, 0.26), transparent 24%),
+    radial-gradient(circle at 40% 88%, rgba(255, 180, 99, 0.26), transparent 30%),
+    linear-gradient(180deg, var(--bg-mid) 0%, var(--bg-deep) 55%, #091f24 100%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -25,6 +36,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  color: var(--text-main);
+  overflow-x: hidden;
 }
 
 body::before {
@@ -33,15 +46,25 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 40%),
+    radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.15), transparent 22%),
+    radial-gradient(circle at 80% 85%, rgba(255, 188, 110, 0.1), transparent 30%),
     repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.08) 0,
-      rgba(255, 255, 255, 0.08) 1px,
+      -28deg,
+      rgba(255, 255, 255, 0.02) 0,
+      rgba(255, 255, 255, 0.02) 1px,
       transparent 1px,
-      transparent 28px
+      transparent 12px
     );
-  opacity: 0.55;
+  opacity: 0.85;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.08));
+  mix-blend-mode: soft-light;
 }
 
 button,
