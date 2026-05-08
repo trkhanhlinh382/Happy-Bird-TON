@@ -491,10 +491,10 @@ function App() {
               <div className="hero-copy">
                 <p className="eyebrow">Telegram Mini App x TON Testnet</p>
                 <h1>Happy Bird</h1>
-                {/* <p className="lede">
+                <p className="lede">
                   Cang bay cao diem cang lon, toc do cang nhanh. Khong gioi han
                   diem, chi ket thuc khi va cham.
-                </p> */}
+                </p>
               </div>
 
               <div className="hero-actions">
@@ -509,7 +509,7 @@ function App() {
               </div>
             </section>
 
-            {/* <section className="status-grid">
+            <section className="status-grid">
               <article className="status-card">
                 <span className="card-label">Telegram</span>
                 <strong>{telegramReady ? 'Connected' : 'Browser preview'}</strong>
@@ -559,7 +559,7 @@ function App() {
                   Top: {topPlayer ? `${topPlayer.player} (${topPlayer.bestScore})` : 'No score yet'}
                 </p>
               </article>
-            </section> */}
+            </section>
 
             <section className="playground">
               <div className="game-panel">
@@ -593,13 +593,13 @@ function App() {
                   </p>
                 </article>
 
-                {/* <article className="info-card">
+                <article className="info-card">
                   <span className="card-label">Difficulty scaling</span>
                   <h3>Speed increases with score</h3>
                   <p>
                     Every point increases game pace. The higher your score, the faster the bird flow.
                   </p>
-                </article> */}
+                </article>
 
                 {gamePhase === 'gameover' && isTestnetWallet && (
                   <article className="info-card reward-card">
