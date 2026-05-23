@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Chakra+Petch:wght@600;700&family=Space+Grotesk:wght@500;700&display=swap');
+
+:root {
+  /* Premium Cyberpunk & TON Theme Color Palette */
+  --bg-deep: #060b11;
+  --bg-mid: #0d1622;
+  --bg-card: rgba(13, 22, 34, 0.65);
+  --bg-card-hover: rgba(21, 35, 54, 0.8);
+  
+  --ton-blue: #0098ea;
+  --ton-cyan: #00d2ff;
+  --neon-pink: #ff5b7f;
+  --neon-green: #39e19c;
+  --neon-gold: #ffc837;
+  
+  --text-main: #f3f7fb;
+  --text-muted: #94a9c4;
+  --text-dark: #060b11;
+  
+  --panel-stroke: rgba(255, 255, 255, 0.08);
+  --panel-stroke-glow: rgba(0, 210, 255, 0.25);
+  --panel-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+  
+  font-family: 'Sora', 'Space Grotesk', system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text-main);
+  background: 
+    radial-gradient(circle at 5% 5%, rgba(0, 152, 234, 0.15), transparent 40%),
+    radial-gradient(circle at 95% 85%, rgba(255, 91, 127, 0.12), transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(0, 210, 255, 0.05), transparent 50%),
+    var(--bg-deep);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  min-height: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--text-main);
+  overflow-x: hidden;
+  background-attachment: fixed;
+}
+
+/* Beautiful Animated Cyber Background Grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: 
+    radial-gradient(circle at 50% 20%, rgba(0, 210, 255, 0.08), transparent 50%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.015) 0px,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 1px,
+      transparent 30px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.015) 0px,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 1px,
+      transparent 30px
+    );
+  opacity: 0.9;
+  z-index: -1;
+  animation: grid-glow 8s ease-in-out infinite alternate;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(6, 11, 17, 0), rgba(0, 152, 234, 0.04));
+  mix-blend-mode: color-dodge;
+  z-index: -1;
+}
+
+@keyframes grid-glow {
+  0% {
+    opacity: 0.7;
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    opacity: 1.0;
+    filter: hue-rotate(15deg);
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 99px;
+  border: 2px solid var(--bg-deep);
+  transition: background 0.3s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ton-cyan);
+}
+
+button,
+a,
+canvas {
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+button {
+  font-family: 'Space Grotesk', 'Sora', sans-serif;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
