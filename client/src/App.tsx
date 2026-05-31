@@ -5,7 +5,7 @@ import {
   useTonConnectUI,
   useTonWallet,
 } from '@tonconnect/ui-react'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import './App.css'
 import { AdminPortal } from './components/AdminPortal'
 import { LeaderboardPanel } from './components/LeaderboardPanel'
@@ -94,6 +94,12 @@ function App() {
     wallet?.account?.address === '0:de2350cfeec6f946616e845b967e183529dbf772bf3ba897a5dcb168078deb6e';
   const isConnectionRestored = useIsConnectionRestored()
   const telegramWebApp = window.Telegram?.WebApp
+  const telegramReady = Boolean(telegramWebApp)
+  const telegramPlatform = telegramWebApp?.platform || 'browser'
+  const telegramUser =
+    telegramWebApp?.initDataUnsafe?.user?.first_name ||
+    telegramWebApp?.initDataUnsafe?.user?.username ||
+    (walletAddress ? `Pilot ${shortAddress(walletAddress)}` : 'Guest pilot')
 
   const [tonConnectUI] = useTonConnectUI()
   const [score, setScore] = useState(0)
@@ -132,6 +138,8 @@ function App() {
   
   // Bảng xếp hạng tab con
   const [leaderboardTab, setLeaderboardTab] = useState<'daily' | 'weekly' | 'monthly'>('daily')
+  const [currentUserRank, setCurrentUserRank] = useState<number>(0)
+  const [currentUserBestScore, setCurrentUserBestScore] = useState<number>(0)
 
   /* --- Admin Portal State --- */
   const [adminSubTab, setAdminSubTab] = useState<'users' | 'events' | 'notifications'>('users')
@@ -228,29 +236,48 @@ function App() {
   }, [])
 
   /* --- Fetch Global Leaderboard from Backend --- */
-  useEffect(() => {
-    const fetchGlobalLeaderboard = async () => {
-      const apiUrl = import.meta.env.VITE_API_URL
-      if (!apiUrl) return
-      
-      try {
-        const res = await fetch(`${apiUrl}/api/leaderboard?top=20`)
-        if (res.ok) {
-          const data = await res.json()
-          const formatted = data.map((item: any) => ({
-            player: item.player,
-            bestScore: item.bestScore,
-            updatedAt: item.updatedAt ? new Date(item.updatedAt).getTime() : Date.now()
-          }))
-          setLeaderboard(formatted)
-        }
-      } catch (err) {
-        console.error('Failed to fetch global leaderboard:', err)
-      }
-    }
+  const fetchGlobalLeaderboard = useCallback(async () => {
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) return
+    
+    try {
+      const queryParams = new URLSearchParams({
+        top: '10',
+        tab: leaderboardTab,
+        player: telegramUser || ''
+      })
+      const res = await fetch(`${apiUrl}/api/leaderboard?${queryParams.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        let entries = []
+        let rank = 0
+        let best = bestScore
 
+        if (Array.isArray(data)) {
+          entries = data
+        } else if (data && Array.isArray(data.entries)) {
+          entries = data.entries
+          rank = data.playerRank || 0
+          best = typeof data.playerBestScore === 'number' ? data.playerBestScore : bestScore
+        }
+
+        const formatted = entries.map((item: any) => ({
+          player: item.player,
+          bestScore: item.bestScore,
+          updatedAt: item.updatedAt ? new Date(item.updatedAt).getTime() : Date.now()
+        }))
+        setLeaderboard(formatted)
+        setCurrentUserRank(rank)
+        setCurrentUserBestScore(best)
+      }
+    } catch (err) {
+      console.error('Failed to fetch global leaderboard:', err)
+    }
+  }, [leaderboardTab, telegramUser, bestScore])
+
+  useEffect(() => {
     fetchGlobalLeaderboard()
-  }, [activeTab, leaderboardTab])
+  }, [activeTab, fetchGlobalLeaderboard])
 
   /* --- Fetch Active Events for frontend display --- */
   useEffect(() => {
@@ -473,19 +500,7 @@ function App() {
 
   /* --- Temporal Leaderboard filtering logic --- */
   const getFilteredLeaderboard = () => {
-    const now = Date.now()
-    const oneDay = 24 * 60 * 60 * 1000
-    const oneWeek = 7 * oneDay
-    const oneMonth = 30 * oneDay
-
     return leaderboard
-      .filter((entry) => {
-        const age = now - entry.updatedAt
-        if (leaderboardTab === 'daily') return age <= oneDay
-        if (leaderboardTab === 'weekly') return age <= oneWeek
-        return age <= oneMonth
-      })
-      .slice(0, 10) // Display only top 10 as per rules!
   }
 
   const handleSubmitScore = async () => {
@@ -516,13 +531,6 @@ function App() {
     }
   }
 
-  const telegramReady = Boolean(telegramWebApp)
-  const telegramPlatform = telegramWebApp?.platform || 'browser'
-  const telegramUser =
-    telegramWebApp?.initDataUnsafe?.user?.first_name ||
-    telegramWebApp?.initDataUnsafe?.user?.username ||
-    (walletAddress ? `Pilot ${shortAddress(walletAddress)}` : 'Guest pilot')
-
   useEffect(() => {
     playerNameRef.current = telegramUser
   }, [telegramUser])
@@ -548,16 +556,13 @@ function App() {
           body: JSON.stringify({ player, bestScore: localScore, telegramId, username, birdBalance }),
         })
         // Fetch refreshed leaderboard to update local state
-        const res = await fetch(`${apiUrl}/api/leaderboard?top=20`)
-        if (res.ok) {
-          setLeaderboard(await res.json())
-        }
+        await fetchGlobalLeaderboard()
       } catch (err) {
         console.error('Failed to auto-sync player profile:', err)
       }
     }
     syncProfileOnLoad()
-  }, [telegramUser, telegramWebApp, birdBalance])
+  }, [telegramUser, telegramWebApp, birdBalance, fetchGlobalLeaderboard])
 
   useEffect(() => {
     const webApp = telegramWebApp
@@ -1004,6 +1009,9 @@ function App() {
           getLeaderboardReward={getLeaderboardReward}
           leaderboardTab={leaderboardTab}
           setLeaderboardTab={setLeaderboardTab}
+          currentUserRank={currentUserRank}
+          currentUserBestScore={currentUserBestScore}
+          currentUsername={telegramUser}
         />
 
         <QuestsPanel

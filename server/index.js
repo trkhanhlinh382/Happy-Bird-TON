@@ -82,14 +82,59 @@ function sendTelegramMessage(chatId, text, botToken) {
 // PUBLIC ENDPOINTS
 // -------------------------------------------------------------------------
 
-// Get top N leaderboard
+// Get top N leaderboard with optional tab time filtering and specific player rank calculation
 app.get('/api/leaderboard', async (req, res) => {
   const top = parseInt(req.query.top) || 20;
-  // Exclude banned players from public leaderboard
-  const entries = await Leaderboard.find({ banned: { $ne: true } })
-    .sort({ bestScore: -1, updatedAt: -1 })
-    .limit(top);
-  res.json(entries);
+  const tab = req.query.tab; // 'daily', 'weekly', 'monthly'
+  const player = req.query.player;
+
+  try {
+    const query = { banned: { $ne: true } };
+
+    if (tab === 'daily') {
+      query.updatedAt = { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) };
+    } else if (tab === 'weekly') {
+      query.updatedAt = { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
+    } else if (tab === 'monthly') {
+      query.updatedAt = { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) };
+    }
+
+    // Retrieve all unbanned players matching time criteria sorted by bestScore descending, then updatedAt descending
+    const allEntries = await Leaderboard.find(query).sort({ bestScore: -1, updatedAt: -1 });
+
+    // Slice for top list
+    const topEntries = allEntries.slice(0, top);
+
+    let playerRank = 0;
+    let playerBestScore = 0;
+
+    if (player) {
+      const idx = allEntries.findIndex((e) => e.player === player);
+      if (idx !== -1) {
+        playerRank = idx + 1;
+        playerBestScore = allEntries[idx].bestScore;
+      } else {
+        // If not found in the filtered list (e.g. hasn't played in daily window), try to fetch their overall document
+        const overallDoc = await Leaderboard.findOne({ player });
+        if (overallDoc) {
+          playerBestScore = overallDoc.bestScore;
+        }
+      }
+    }
+
+    // If the request doesn't ask for a tab or player, return raw array for backward compatibility
+    if (!tab && !player) {
+      return res.json(topEntries);
+    }
+
+    res.json({
+      entries: topEntries,
+      playerRank,
+      playerBestScore
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Submit or update score
