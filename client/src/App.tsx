@@ -629,6 +629,12 @@ function App() {
 
   const wallet = useTonWallet()
   const walletAddress = useTonAddress()
+  const isAdmin = 
+    walletAddress === '0QBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNYej' || 
+    walletAddress === 'kQBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNdpm' ||
+    walletAddress === 'EQBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNWHs' ||
+    walletAddress === 'UQBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNTwp' ||
+    wallet?.account?.address === '0:5617c5ebdb3fe98702812638390bd17645c9ca2c0330195e65067c28def39235';
   const isConnectionRestored = useIsConnectionRestored()
   const telegramWebApp = window.Telegram?.WebApp
 
@@ -2089,7 +2095,7 @@ function App() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
           Quests
         </button>
-        {walletAddress === '0QBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNYej' && (
+        {isAdmin && (
           <button
             type="button"
             className={`tab-button tab-admin ${activeTab === 'admin' ? 'active' : ''}`}
