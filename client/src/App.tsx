@@ -670,6 +670,19 @@ function App() {
   // Bảng xếp hạng tab con
   const [leaderboardTab, setLeaderboardTab] = useState<'daily' | 'weekly' | 'monthly'>('daily')
 
+  /* --- Admin Portal State --- */
+  const [adminSubTab, setAdminSubTab] = useState<'users' | 'events' | 'notifications'>('users')
+  const [adminPlayers, setAdminPlayers] = useState<any[]>([])
+  const [adminEvents, setAdminEvents] = useState<any[]>([])
+  const [newEventTitle, setNewEventTitle] = useState('')
+  const [newEventDesc, setNewEventDesc] = useState('')
+  const [newEventRewardType, setNewEventRewardType] = useState('token')
+  const [newEventRewardAmount, setNewEventRewardAmount] = useState(0)
+  const [broadcastMessage, setBroadcastMessage] = useState('')
+  const [adminLoading, setAdminLoading] = useState(false)
+  const [adminStatusMsg, setAdminStatusMsg] = useState('')
+  const [activeEvent, setActiveEvent] = useState<any | null>(null)
+
   const isTestnetWallet = wallet?.account.chain === CHAIN.TESTNET
 
   /* --- Helper: Check and reset daily stats on day change --- */
@@ -775,6 +788,152 @@ function App() {
 
     fetchGlobalLeaderboard()
   }, [activeTab, leaderboardTab])
+
+  /* --- Fetch Active Events for frontend display --- */
+  useEffect(() => {
+    const fetchActiveEvent = async () => {
+      const apiUrl = import.meta.env.VITE_API_URL
+      if (!apiUrl) return
+      try {
+        const res = await fetch(`${apiUrl}/api/events/active`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data && data.length > 0) {
+            setActiveEvent(data[0]) // Get the most recent active event
+          } else {
+            setActiveEvent(null)
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch active event:", err)
+      }
+    }
+    fetchActiveEvent()
+  }, [activeTab])
+
+  /* --- Fetch Admin Dashboard Data --- */
+  useEffect(() => {
+    if (activeTab !== 'admin') return
+
+    const fetchAdminData = async () => {
+      const apiUrl = import.meta.env.VITE_API_URL
+      if (!apiUrl) return
+      setAdminLoading(true)
+      try {
+        const [playersRes, eventsRes] = await Promise.all([
+          fetch(`${apiUrl}/api/admin/players`),
+          fetch(`${apiUrl}/api/admin/events`)
+        ])
+        if (playersRes.ok) setAdminPlayers(await playersRes.json())
+        if (eventsRes.ok) setAdminEvents(await eventsRes.json())
+      } catch (err) {
+        console.error("Failed to fetch admin dashboard data:", err)
+      } finally {
+        setAdminLoading(false)
+      }
+    }
+    fetchAdminData()
+  }, [activeTab])
+
+  /* --- Admin Actions --- */
+  const handleToggleBan = async (playerWallet: string, currentBanned: boolean) => {
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) return
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/players/ban`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: playerWallet, banned: !currentBanned })
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setAdminPlayers(prev => prev.map(p => p.player === playerWallet ? { ...p, banned: updated.banned } : p))
+        setAdminStatusMsg(`Updated ban status for player.`)
+        setTimeout(() => setAdminStatusMsg(''), 3000)
+      }
+    } catch (err) {
+      console.error("Failed to toggle player ban status:", err)
+    }
+  }
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) return
+    if (!newEventTitle || !newEventDesc) return alert("Title and Description are required")
+
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newEventTitle,
+          description: newEventDesc,
+          rewardType: newEventRewardType,
+          rewardAmount: Number(newEventRewardAmount)
+        })
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setAdminEvents(prev => [created, ...prev])
+        setNewEventTitle('')
+        setNewEventDesc('')
+        setNewEventRewardAmount(0)
+        setAdminStatusMsg("Event created successfully.")
+        setTimeout(() => setAdminStatusMsg(''), 3000)
+      }
+    } catch (err) {
+      console.error("Failed to create event:", err)
+    }
+  }
+
+  const handleToggleEvent = async (eventId: string, currentActive: boolean) => {
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) return
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/events/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: eventId, isActive: !currentActive })
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setAdminEvents(prev => prev.map(e => e._id === eventId ? { ...e, isActive: updated.isActive } : e))
+        setAdminStatusMsg("Event status updated.")
+        setTimeout(() => setAdminStatusMsg(''), 3000)
+      }
+    } catch (err) {
+      console.error("Failed to toggle event status:", err)
+    }
+  }
+
+  const handleBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) return
+    if (!broadcastMessage) return alert("Message is required")
+
+    setAdminLoading(true)
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/notifications/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: broadcastMessage })
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setBroadcastMessage('')
+        setAdminStatusMsg(`Broadcasted to ${data.successCount} players (${data.failCount} failed).`)
+        setTimeout(() => setAdminStatusMsg(''), 5000)
+      } else {
+        alert("Broadcast failed: " + (data.error || "Unknown error"))
+      }
+    } catch (err) {
+      console.error("Broadcast request failed:", err)
+    } finally {
+      setAdminLoading(false)
+    }
+  }
 
   /* --- Spawn Floating Coins animation trigger --- */
   const triggerCoinAnimation = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -969,13 +1128,16 @@ function App() {
         return updated
       })
 
+      const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id?.toString() || ""
+      const username = window.Telegram?.WebApp?.initDataUnsafe?.user?.username || ""
+
       const apiUrl = import.meta.env.VITE_API_URL
       if (apiUrl) {
         try {
           await fetch(`${apiUrl}/api/leaderboard`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ player, bestScore: nextScore }),
+            body: JSON.stringify({ player, bestScore: nextScore, telegramId, username }),
           })
         } catch (err) {
           console.error('Failed to sync score with server:', err)
@@ -1244,6 +1406,21 @@ function App() {
 
       <div className="content-shell">
         <section className={`play-page tab-panel ${activeTab === 'play' ? 'is-active' : ''}`}>
+          {activeEvent && (
+            <div className="active-event-banner">
+              <div className="event-banner-glow" />
+              <div className="event-banner-content">
+                <span className="event-badge">🔴 LIVE EVENT</span>
+                <div className="event-text">
+                  <strong>{activeEvent.title}</strong>
+                  <p>{activeEvent.description}</p>
+                </div>
+                {activeEvent.rewardAmount > 0 && (
+                  <span className="event-reward">+{activeEvent.rewardAmount} BIRD</span>
+                )}
+              </div>
+            </div>
+          )}
           <div className="game-panel game-panel--full">
             <div className="canvas-shell">
               <canvas
@@ -1593,6 +1770,299 @@ function App() {
             </article>
           )}
         </section>
+
+        {/* ========================================================================= */}
+        {/* TAB PANEL 4: ADMIN COMMAND CENTER (Bảo mật) */}
+        {/* ========================================================================= */}
+        <section className={`info-page tab-panel ${activeTab === 'admin' ? 'is-active' : ''}`}>
+          
+          <div className="admin-header">
+            <span className="eyebrow">COMMAND CENTER</span>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--neon-blue)', margin: '4px 0' }}>Admin Portal</h2>
+            <p style={{ fontSize: '0.8rem', color: '#8da5c4', margin: '4px 0 16px 0' }}>Configure events, manage players, and communicate directly via Telegram.</p>
+            {adminStatusMsg && (
+              <div style={{
+                background: 'rgba(0,210,255,0.15)',
+                border: '1px solid var(--neon-blue)',
+                padding: '10px',
+                borderRadius: '8px',
+                color: 'white',
+                fontSize: '0.8rem',
+                textAlign: 'center',
+                marginBottom: '16px',
+                boxShadow: '0 0 10px rgba(0,210,255,0.2)'
+              }}>
+                {adminStatusMsg}
+              </div>
+            )}
+          </div>
+
+          {/* Admin Subtabs */}
+          <div className="leaderboard-subtabs" style={{ marginBottom: '20px' }}>
+            <button
+              className={`subtab-btn ${adminSubTab === 'users' ? 'active' : ''}`}
+              onClick={() => setAdminSubTab('users')}
+            >
+              Players ({adminPlayers.length})
+            </button>
+            <button
+              className={`subtab-btn ${adminSubTab === 'events' ? 'active' : ''}`}
+              onClick={() => setAdminSubTab('events')}
+            >
+              Events ({adminEvents.length})
+            </button>
+            <button
+              className={`subtab-btn ${adminSubTab === 'notifications' ? 'active' : ''}`}
+              onClick={() => setAdminSubTab('notifications')}
+            >
+              Broadcast
+            </button>
+          </div>
+
+          {adminLoading && (
+            <div style={{
+              textAlign: 'center',
+              fontSize: '0.8rem',
+              color: 'var(--neon-blue)',
+              padding: '10px 0',
+              fontWeight: 'bold',
+              letterSpacing: '0.05em'
+            }}>
+              SYNCHRONIZING WITH SERVER...
+            </div>
+          )}
+
+          {/* SUBTAB 1: Players Management */}
+          {adminSubTab === 'users' && (
+            <div className="admin-panel-container">
+              {adminPlayers.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {adminPlayers.map((player) => (
+                    <article
+                      key={player.player}
+                      className="info-card"
+                      style={{
+                        padding: '16px',
+                        border: player.banned ? '1px solid rgba(255, 91, 127, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
+                        background: player.banned ? 'rgba(255, 91, 127, 0.03)' : 'rgba(255, 255, 255, 0.02)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <div style={{ maxWidth: '70%' }}>
+                          <span
+                            className="card-label"
+                            style={{
+                              color: player.banned ? '#ff5b7f' : 'var(--neon-blue)',
+                              fontSize: '0.65rem',
+                              fontWeight: 900
+                            }}
+                          >
+                            {player.banned ? '❌ BANNED' : '🟢 ACTIVE'}
+                          </span>
+                          <h4 style={{ margin: '4px 0', fontSize: '0.85rem', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                            {player.player}
+                          </h4>
+                          {player.username && (
+                            <p style={{ fontSize: '0.75rem', color: '#8da5c4', margin: 0 }}>
+                              Telegram: <strong>@{player.username}</strong> ({player.telegramId})
+                            </p>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span className="leader-score" style={{ fontSize: '1.1rem' }}>{player.bestScore} pts</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '0.72rem',
+                            borderColor: player.banned ? '#00d2ff' : '#ff5b7f',
+                            color: player.banned ? '#00d2ff' : '#ff5b7f',
+                            minWidth: 'auto',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => handleToggleBan(player.player, player.banned)}
+                        >
+                          {player.banned ? 'UNBAN PLAYER' : 'BAN PLAYER'}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <article className="info-card">
+                  <h3>No players registered</h3>
+                  <p>Play a game on a connected client to sync data.</p>
+                </article>
+              )}
+            </div>
+          )}
+
+          {/* SUBTAB 2: Events Management */}
+          {adminSubTab === 'events' && (
+            <div className="admin-panel-container">
+              {/* Event Creation Form */}
+              <form onSubmit={handleCreateEvent} className="info-card" style={{ padding: '16px', marginBottom: '20px', display: 'flex', flexDirection: 'column' }}>
+                <span className="card-label">NEW EVENT</span>
+                <h3 style={{ margin: '4px 0 12px 0', fontSize: '1.2rem' }}>Launch Campaign</h3>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
+                  <input
+                    type="text"
+                    placeholder="Event Title (e.g., Happy Hours Airdrop)"
+                    value={newEventTitle}
+                    onChange={(e) => setNewEventTitle(e.target.value)}
+                    style={{
+                      padding: '10px',
+                      borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: 'white',
+                      fontSize: '0.85rem'
+                    }}
+                  />
+                  <textarea
+                    placeholder="Event Description (e.g., Complete runs between 5h-6h to claim 50 BIRD!)"
+                    value={newEventDesc}
+                    onChange={(e) => setNewEventDesc(e.target.value)}
+                    style={{
+                      padding: '10px',
+                      borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: 'white',
+                      fontSize: '0.85rem',
+                      minHeight: '60px',
+                      resize: 'vertical'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <select
+                      value={newEventRewardType}
+                      onChange={(e) => setNewEventRewardType(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '10px',
+                        borderRadius: '8px',
+                        background: 'rgba(5, 10, 17, 0.95)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: 'white',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      <option value="token">Token Reward (BIRD)</option>
+                      <option value="gas_discount">Gas Discount (TON)</option>
+                      <option value="airdrop">Free Airdrop</option>
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="Amount"
+                      value={newEventRewardAmount}
+                      onChange={(e) => setNewEventRewardAmount(Number(e.target.value))}
+                      style={{
+                        width: '80px',
+                        padding: '10px',
+                        borderRadius: '8px',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: 'white',
+                        fontSize: '0.85rem'
+                      }}
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="secondary-button primary-glow" style={{ width: '100%', height: '40px', cursor: 'pointer' }}>
+                  CREATE & LAUNCH
+                </button>
+              </form>
+
+              {/* Events List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {adminEvents.length > 0 ? (
+                  adminEvents.map((evt) => (
+                    <article key={evt._id} className="info-card" style={{ padding: '16px', opacity: evt.isActive ? 1 : 0.6, border: evt.isActive ? '1px solid rgba(0,210,255,0.2)' : '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ maxWidth: '75%' }}>
+                          <span className="card-label" style={{ color: evt.isActive ? 'var(--neon-green)' : '#8da5c4', fontSize: '0.65rem' }}>
+                            {evt.isActive ? '🔴 RUNNING' : '⏸️ PAUSED'}
+                          </span>
+                          <h4 style={{ margin: '4px 0', fontSize: '0.95rem', fontWeight: 'bold' }}>{evt.title}</h4>
+                          <p style={{ fontSize: '0.8rem', color: '#8da5c4', margin: '4px 0' }}>{evt.description}</p>
+                          {evt.rewardAmount > 0 && (
+                            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--neon-gold)' }}>
+                              Bonus: +{evt.rewardAmount} BIRD
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '0.72rem',
+                            minWidth: 'auto',
+                            borderColor: 'rgba(255,255,255,0.2)',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => handleToggleEvent(evt._id, evt.isActive)}
+                        >
+                          {evt.isActive ? 'PAUSE' : 'ACTIVATE'}
+                        </button>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <p style={{ textAlign: 'center', fontSize: '0.8rem', color: '#8da5c4' }}>No events created yet.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SUBTAB 3: Broadcast Notifications */}
+          {adminSubTab === 'notifications' && (
+            <div className="admin-panel-container">
+              <form onSubmit={handleBroadcast} className="info-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column' }}>
+                <span className="card-label">TELEGRAM BROADCAST</span>
+                <h3 style={{ margin: '4px 0 12px 0', fontSize: '1.2rem' }}>Send Telegram Alerts</h3>
+                <p style={{ fontSize: '0.78rem', color: '#8da5c4', marginBottom: '16px', lineHeight: '1.4' }}>
+                  Write a message to broadcast directly to the Telegram inbox of all players registered via the Mini App. You can use standard HTML tags (like &lt;b&gt;bold&lt;/b&gt;).
+                </p>
+
+                <textarea
+                  placeholder="Type your announcement here... (e.g. <b>Happy Hour Event is Live!</b> Fly now to get double tokens!)"
+                  value={broadcastMessage}
+                  onChange={(e) => setBroadcastMessage(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'white',
+                    fontSize: '0.85rem',
+                    minHeight: '120px',
+                    marginBottom: '16px',
+                    resize: 'vertical'
+                  }}
+                />
+
+                <button
+                  type="submit"
+                  className="secondary-button primary-glow"
+                  style={{ width: '100%', height: '40px', cursor: 'pointer' }}
+                  disabled={adminLoading}
+                >
+                  {adminLoading ? 'BROADCASTING...' : 'SEND TO TELEGRAM'}
+                </button>
+              </form>
+            </div>
+          )}
+        </section>
       </div>
 
       <nav className="bottom-tabs" aria-label="Main navigation">
@@ -1619,6 +2089,36 @@ function App() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
           Quests
         </button>
+        {walletAddress === '0QBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNYej' && (
+          <button
+            type="button"
+            className={`tab-button tab-admin ${activeTab === 'admin' ? 'active' : ''}`}
+            onClick={() => setActiveTab('admin')}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              color: activeTab === 'admin' ? 'var(--neon-blue)' : '#8da5c4',
+              background: 'none',
+              border: 'none',
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              cursor: 'pointer',
+              transition: 'color 0.2s ease',
+              flex: 1
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            Admin
+          </button>
+        )}
       </nav>
     </main>
   )
