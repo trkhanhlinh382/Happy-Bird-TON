@@ -1074,6 +1074,38 @@ function App() {
     playerNameRef.current = telegramUser
   }, [telegramUser])
 
+  // Automatically sync profile to MongoDB on wallet connection or Telegram login (even if score is 0)
+  useEffect(() => {
+    const syncProfileOnLoad = async () => {
+      const apiUrl = import.meta.env.VITE_API_URL
+      if (!apiUrl) return
+      
+      const player = telegramUser
+      // Ignore default Guest pilot to prevent database clutter
+      if (player === 'Guest pilot') return
+
+      const localScore = Number(window.localStorage.getItem(BEST_SCORE_KEY) || '0')
+      const telegramId = telegramWebApp?.initDataUnsafe?.user?.id?.toString() || ""
+      const username = telegramWebApp?.initDataUnsafe?.user?.username || ""
+
+      try {
+        await fetch(`${apiUrl}/api/leaderboard`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ player, bestScore: localScore, telegramId, username }),
+        })
+        // Fetch refreshed leaderboard to update local state
+        const res = await fetch(`${apiUrl}/api/leaderboard?top=20`)
+        if (res.ok) {
+          setLeaderboard(await res.json())
+        }
+      } catch (err) {
+        console.error('Failed to auto-sync player profile:', err)
+      }
+    }
+    syncProfileOnLoad()
+  }, [telegramUser, telegramWebApp])
+
   useEffect(() => {
     const webApp = telegramWebApp
 
