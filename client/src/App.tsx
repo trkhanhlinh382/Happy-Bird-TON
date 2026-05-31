@@ -751,6 +751,31 @@ function App() {
     return () => clearInterval(interval)
   }, [])
 
+  /* --- Fetch Global Leaderboard from Backend --- */
+  useEffect(() => {
+    const fetchGlobalLeaderboard = async () => {
+      const apiUrl = import.meta.env.VITE_API_URL
+      if (!apiUrl) return
+      
+      try {
+        const res = await fetch(`${apiUrl}/api/leaderboard?top=20`)
+        if (res.ok) {
+          const data = await res.json()
+          const formatted = data.map((item: any) => ({
+            player: item.player,
+            bestScore: item.bestScore,
+            updatedAt: item.updatedAt ? new Date(item.updatedAt).getTime() : Date.now()
+          }))
+          setLeaderboard(formatted)
+        }
+      } catch (err) {
+        console.error('Failed to fetch global leaderboard:', err)
+      }
+    }
+
+    fetchGlobalLeaderboard()
+  }, [activeTab, leaderboardTab])
+
   /* --- Spawn Floating Coins animation trigger --- */
   const triggerCoinAnimation = (event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -915,14 +940,15 @@ function App() {
       setBestScore(nextScore)
     }
 
-    const syncLeaderboard = (nextScore: number) => {
+    const syncLeaderboard = async (nextScore: number) => {
       if (nextScore <= 0) {
         return
       }
 
+      const player = playerNameRef.current
+
       setLeaderboard((previous) => {
         const now = Date.now()
-        const player = playerNameRef.current
         const existing = previous.find((entry) => entry.player === player)
 
         if (existing && existing.bestScore >= nextScore) {
@@ -942,6 +968,19 @@ function App() {
 
         return updated
       })
+
+      const apiUrl = import.meta.env.VITE_API_URL
+      if (apiUrl) {
+        try {
+          await fetch(`${apiUrl}/api/leaderboard`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ player, bestScore: nextScore }),
+          })
+        } catch (err) {
+          console.error('Failed to sync score with server:', err)
+        }
+      }
     }
 
     const resetGame = (phase: GamePhase) => {

@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_GAME_PIPE_SPEED?: string
   readonly VITE_GAME_FLAP_FORCE?: string
   readonly VITE_GAME_GRAVITY?: string
+  readonly VITE_API_URL?: string
 }
 
 interface ImportMeta {
