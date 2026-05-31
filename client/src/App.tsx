@@ -630,11 +630,16 @@ function App() {
   const wallet = useTonWallet()
   const walletAddress = useTonAddress()
   const isAdmin = 
+    // Ví cá nhân 0QBWF8...
     walletAddress === '0QBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNYej' || 
     walletAddress === 'kQBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNdpm' ||
     walletAddress === 'EQBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNWHs' ||
     walletAddress === 'UQBWF8Xr2z_phwKBJjg5C9F2RcnKLAMwGV5lBnwo3vOSNTwp' ||
-    wallet?.account?.address === '0:5617c5ebdb3fe98702812638390bd17645c9ca2c0330195e65067c28def39235';
+    wallet?.account?.address === '0:5617c5ebdb3fe98702812638390bd17645c9ca2c0330195e65067c28def39235' ||
+    // Ví deployer/chạy script 0QDeI1...bm3e (đang hiển thị trong ảnh)
+    walletAddress === '0QDeI1DP7sb5RmFuhFuWfhg1Kdv3cr87qJel3LFoB43rbm3e' ||
+    walletAddress === 'kQDeI1DP7sb5RmFuhFuWfhg1Kdv3cr87qJel3LFoB43rbjAb' ||
+    wallet?.account?.address === '0:de2350cfeec6f946616e845b967e183529dbf772bf3ba897a5dcb168078deb6e';
   const isConnectionRestored = useIsConnectionRestored()
   const telegramWebApp = window.Telegram?.WebApp
 
