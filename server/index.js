@@ -17,13 +17,14 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Expanded schema to store Telegram meta and ban status
+// Expanded schema to store Telegram meta, ban status, and BIRD balance
 const leaderboardSchema = new mongoose.Schema({
   player: { type: String, required: true, unique: true },
   bestScore: { type: Number, required: true },
   telegramId: { type: String },
   username: { type: String },
   banned: { type: Boolean, default: false },
+  birdBalance: { type: Number, default: 0 },
   updatedAt: { type: Date, default: Date.now }
 });
 
@@ -43,40 +44,38 @@ const Event = mongoose.model('Event', eventSchema);
 
 // Helper function to send Telegram Bot Message
 function sendTelegramMessage(chatId, text, botToken) {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify({
-      chat_id: chatId,
-      text: text,
-      parse_mode: 'HTML'
-    });
-
-    const options = {
-      hostname: 'api.telegram.org',
-      port: 443,
-      path: `/bot${botToken}/sendMessage`,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': data.length
-      }
-    };
-
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          resolve(JSON.parse(body));
-        } else {
-          reject(new Error(`Telegram error ${res.statusCode}: ${body}`));
-        }
-      });
-    });
-
-    req.on('error', (e) => reject(e));
-    req.write(data);
-    req.end();
+  const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+  const data = JSON.stringify({
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'HTML'
   });
+
+  const urlParsed = new URL(url);
+  const options = {
+    hostname: urlParsed.hostname,
+    path: urlParsed.pathname + urlParsed.search,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(data)
+    }
+  };
+
+  const req = https.request(options, (res) => {
+    let body = '';
+    res.on('data', (chunk) => body += chunk);
+    res.on('end', () => {
+      console.log(`Telegram Bot broadcast response: ${body}`);
+    });
+  });
+
+  req.on('error', (e) => {
+    console.error(`Telegram Bot broadcast error: ${e.message}`);
+  });
+
+  req.write(data);
+  req.end();
 }
 
 // -------------------------------------------------------------------------
@@ -95,7 +94,7 @@ app.get('/api/leaderboard', async (req, res) => {
 
 // Submit or update score
 app.post('/api/leaderboard', async (req, res) => {
-  const { player, bestScore, telegramId, username } = req.body;
+  const { player, bestScore, telegramId, username, birdBalance } = req.body;
   if (!player || typeof bestScore !== 'number') {
     return res.status(400).json({ error: 'Invalid payload' });
   }
@@ -109,11 +108,12 @@ app.post('/api/leaderboard', async (req, res) => {
     }
 
     if (!entry) {
-      entry = new Leaderboard({ player, bestScore, telegramId, username });
+      entry = new Leaderboard({ player, bestScore, telegramId, username, birdBalance: birdBalance || 0 });
     } else {
       // Sync telegram info if provided
       if (telegramId) entry.telegramId = telegramId;
       if (username) entry.username = username;
+      if (typeof birdBalance === 'number') entry.birdBalance = birdBalance;
       
       // Update highscore
       if (bestScore > entry.bestScore) {

@@ -1092,7 +1092,7 @@ function App() {
         await fetch(`${apiUrl}/api/leaderboard`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ player, bestScore: localScore, telegramId, username }),
+          body: JSON.stringify({ player, bestScore: localScore, telegramId, username, birdBalance }),
         })
         // Fetch refreshed leaderboard to update local state
         const res = await fetch(`${apiUrl}/api/leaderboard?top=20`)
@@ -1104,7 +1104,7 @@ function App() {
       }
     }
     syncProfileOnLoad()
-  }, [telegramUser, telegramWebApp])
+  }, [telegramUser, telegramWebApp, birdBalance])
 
   useEffect(() => {
     const webApp = telegramWebApp
@@ -1181,7 +1181,7 @@ function App() {
           await fetch(`${apiUrl}/api/leaderboard`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ player, bestScore: nextScore, telegramId, username }),
+            body: JSON.stringify({ player, bestScore: nextScore, telegramId, username, birdBalance }),
           })
         } catch (err) {
           console.error('Failed to sync score with server:', err)
@@ -1736,6 +1736,7 @@ function App() {
                             <th style={{ padding: '16px' }}>TON Wallet Address</th>
                             <th style={{ padding: '16px' }}>Telegram Account</th>
                             <th style={{ padding: '16px', textAlign: 'right' }}>Best Score</th>
+                            <th style={{ padding: '16px', textAlign: 'right' }}>BIRD Balance</th>
                             <th style={{ padding: '16px', textAlign: 'right' }}>Actions</th>
                           </tr>
                         </thead>
@@ -1776,6 +1777,9 @@ function App() {
                                 </td>
                                 <td style={{ padding: '16px', textAlign: 'right', fontWeight: 800, color: 'var(--neon-blue)', fontSize: '1rem' }}>
                                   {player.bestScore} pts
+                                </td>
+                                <td style={{ padding: '16px', textAlign: 'right', fontWeight: 800, color: 'var(--neon-gold)', fontSize: '1rem' }}>
+                                  {player.birdBalance || 0} BIRD
                                 </td>
                                 <td style={{ padding: '16px', textAlign: 'right' }}>
                                   <button
