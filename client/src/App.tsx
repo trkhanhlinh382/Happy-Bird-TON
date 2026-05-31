@@ -802,9 +802,9 @@ function App() {
           })
         }
 
-        if (current.spawnTimer >= 90) {
-          current.pipes.push(createPipe())
-          current.spawnTimer = 0
+        const lastPipe = current.pipes[current.pipes.length - 1]
+        if (lastPipe && lastPipe.x <= CANVAS_WIDTH - 220) {
+          current.pipes.push(createPipe(0))
         }
 
         for (const pipe of current.pipes) {
