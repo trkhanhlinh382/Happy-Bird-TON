@@ -978,9 +978,10 @@ function App() {
   const handleCheckInClaim = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (checkedInToday || !hasPlayedFirstGameToday) return
     
-    const nextStreak = streak === 7 ? 1 : streak + 1
+    const currentStreakIndex = streak % 7
+    const nextStreak = currentStreakIndex === 6 ? 0 : currentStreakIndex + 1
     const rewards = [10, 20, 30, 40, 50, 60, 100]
-    const amount = rewards[streak] // index is streak (0-6)
+    const amount = rewards[currentStreakIndex]
     
     const newBalance = birdBalance + amount
     window.localStorage.setItem('happy-bird-ton-bird-balance', String(newBalance))
@@ -2201,8 +2202,10 @@ function App() {
                 const amount = rewards[i]
                 
                 // Determine day state
-                const isClaimed = streak > i && (checkedInToday || i < streak - 1)
-                const isActive = hasPlayedFirstGameToday && !checkedInToday && i === streak - 1
+                const isClaimed = checkedInToday
+                  ? (streak === 7 || streak === 0 ? true : i < (streak % 7))
+                  : i < (streak % 7)
+                const isActive = hasPlayedFirstGameToday && !checkedInToday && i === (streak % 7)
 
                 if (dayNum === 7) {
                   return (
