@@ -17,6 +17,7 @@ interface ImportMeta {
 }
 
 interface TelegramWebAppUser {
+  id?: number
   first_name?: string
   username?: string
 }

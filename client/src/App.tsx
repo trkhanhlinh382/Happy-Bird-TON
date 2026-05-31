@@ -10,7 +10,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 type GamePhase = 'idle' | 'running' | 'gameover'
-type AppTab = 'play' | 'top' | 'info'
+type AppTab = 'play' | 'top' | 'info' | 'admin'
 type TxStatus = 'idle' | 'pending' | 'sent' | 'error'
 type GameoverPopup = 'record' | 'gameover' | null
 
