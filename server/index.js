@@ -139,6 +139,32 @@ app.get('/api/leaderboard', async (req, res) => {
   }
 });
 
+// Get player profile for device sync
+app.get('/api/user/profile', async (req, res) => {
+  const { player, telegramId } = req.query;
+  if (!player && !telegramId) {
+    return res.status(400).json({ error: 'Missing player or telegramId' });
+  }
+
+  try {
+    let entry = null;
+    if (telegramId) {
+      entry = await Leaderboard.findOne({ telegramId });
+    }
+    if (!entry && player) {
+      entry = await Leaderboard.findOne({ player });
+    }
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Player profile not found' });
+    }
+
+    res.json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Submit or update score
 app.post('/api/leaderboard', async (req, res) => {
   const { player, bestScore, telegramId, username, birdBalance } = req.body;

@@ -621,7 +621,7 @@ function App() {
     playerNameRef.current = telegramUser
   }, [telegramUser])
 
-  // Automatically sync profile to MongoDB on wallet connection or Telegram login (even if score is 0)
+  // Automatically sync profile to MongoDB on wallet connection or Telegram login (resolving cross-device overwrites)
   useEffect(() => {
     const syncProfileOnLoad = async () => {
       const apiUrl = import.meta.env.VITE_API_URL
@@ -636,11 +636,64 @@ function App() {
       const username = telegramWebApp?.initDataUnsafe?.user?.username || ""
 
       try {
-        await fetch(`${apiUrl}/api/leaderboard`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ player, bestScore: localScore, telegramId, username, birdBalance }),
-        })
+        // Step 1: Fetch existing profile from server first
+        const queryParams = new URLSearchParams()
+        if (telegramId) queryParams.append('telegramId', telegramId)
+        if (player) queryParams.append('player', player)
+
+        const profileRes = await fetch(`${apiUrl}/api/user/profile?${queryParams.toString()}`)
+        
+        if (profileRes.ok) {
+          const serverProfile = await profileRes.json()
+          
+          let needsUpdateOnServer = false
+          let updatedBalance = birdBalance
+          let updatedBestScore = localScore
+
+          // If server balance is higher, sync it to client local storage
+          if (serverProfile.birdBalance > birdBalance) {
+            updatedBalance = serverProfile.birdBalance
+            setBirdBalance(serverProfile.birdBalance)
+            window.localStorage.setItem('happy-bird-ton-bird-balance', String(serverProfile.birdBalance))
+          } else if (birdBalance > serverProfile.birdBalance) {
+            // Client has higher balance (e.g. offline claims), we need to update server
+            needsUpdateOnServer = true
+          }
+
+          // If server score is higher, sync it to client local storage
+          if (serverProfile.bestScore > localScore) {
+            updatedBestScore = serverProfile.bestScore
+            bestScoreRef.current = serverProfile.bestScore
+            setBestScore(serverProfile.bestScore)
+            window.localStorage.setItem(BEST_SCORE_KEY, String(serverProfile.bestScore))
+          } else if (localScore > serverProfile.bestScore) {
+            // Client has broken record offline, we need to update server
+            needsUpdateOnServer = true
+          }
+
+          // If client data is ahead of server, or we just connected a wallet and want to update meta info
+          if (needsUpdateOnServer || !serverProfile.telegramId || !serverProfile.username) {
+            await fetch(`${apiUrl}/api/leaderboard`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                player, 
+                bestScore: updatedBestScore, 
+                telegramId, 
+                username, 
+                birdBalance: updatedBalance 
+              }),
+            })
+          }
+        } else if (profileRes.status === 404) {
+          // Profile doesn't exist yet on server, create it with local data
+          await fetch(`${apiUrl}/api/leaderboard`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ player, bestScore: localScore, telegramId, username, birdBalance }),
+          })
+        }
+
         // Fetch refreshed leaderboard to update local state
         await fetchGlobalLeaderboard()
       } catch (err) {
