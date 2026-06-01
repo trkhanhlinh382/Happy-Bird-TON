@@ -473,8 +473,64 @@ function App() {
     }, 1200)
   }
 
+  /* --- Helper: Sync all client data to MongoDB --- */
+  const syncAllDataToServer = async (customBalance?: number, customBestScore?: number) => {
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) return
+
+    const player = telegramUser
+    if (player === 'Guest pilot') return
+
+    const telegramId = telegramWebApp?.initDataUnsafe?.user?.id?.toString() || ""
+    const username = telegramWebApp?.initDataUnsafe?.user?.username || ""
+
+    const localScore = customBestScore !== undefined ? customBestScore : Number(window.localStorage.getItem(BEST_SCORE_KEY) || '0')
+    const currentBalance = customBalance !== undefined ? customBalance : birdBalance
+
+    const localStreak = Number(window.localStorage.getItem('happy-bird-ton-streak') || '0')
+    const localLastCheckIn = window.localStorage.getItem('happy-bird-ton-last-checkin-date') || ""
+    const localQuestDate = window.localStorage.getItem('happy-bird-ton-quest-date') || ""
+    const localGamesPlayed = Number(window.localStorage.getItem('happy-bird-ton-games-today') || '0')
+    const localRecordBroken = window.localStorage.getItem('happy-bird-ton-record-broken-today') === 'true'
+    const localPoints = Number(window.localStorage.getItem('happy-bird-ton-points-accumulated-today') || '0')
+    const localPointsTrack = Number(window.localStorage.getItem('happy-bird-ton-games-tracked-points') || '0')
+    const localQ1 = window.localStorage.getItem('happy-bird-ton-quest1-claimed') === 'true'
+    const localQ2 = window.localStorage.getItem('happy-bird-ton-quest2-claimed') === 'true'
+    const localQ3 = window.localStorage.getItem('happy-bird-ton-quest3-claimed') === 'true'
+    const localChecked = window.localStorage.getItem('happy-bird-ton-checked-in-today') === 'true'
+    const localPlayedFirst = window.localStorage.getItem('happy-bird-ton-played-first-game') === 'true'
+
+    try {
+      await fetch(`${apiUrl}/api/leaderboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          player, 
+          bestScore: localScore, 
+          telegramId, 
+          username, 
+          birdBalance: currentBalance,
+          streak: localStreak,
+          lastCheckInDate: localLastCheckIn,
+          questDate: localQuestDate,
+          gamesPlayedToday: localGamesPlayed,
+          recordBrokenToday: localRecordBroken,
+          pointsAccumulatedToday: localPoints,
+          gamesTrackedForPoints: localPointsTrack,
+          quest1Claimed: localQ1,
+          quest2Claimed: localQ2,
+          quest3Claimed: localQ3,
+          checkedInToday: localChecked,
+          playedFirstGameToday: localPlayedFirst
+        }),
+      })
+    } catch (err) {
+      console.error('Failed to sync all data to server:', err)
+    }
+  }
+
   /* --- Claims Handler --- */
-  const handleCheckInClaim = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleCheckInClaim = async (event: React.MouseEvent<HTMLButtonElement>) => {
     if (checkedInToday || !hasPlayedFirstGameToday) return
     
     const currentStreakIndex = streak % 7
@@ -495,9 +551,12 @@ function App() {
     sfx.playClaim()
     triggerCoinAnimation(event)
     triggerHaptic('success')
+
+    // Lập tức đồng bộ lên server sau khi check-in
+    await syncAllDataToServer(newBalance)
   }
 
-  const handleQuestClaim = (questNum: 1 | 2 | 3, amount: number, event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleQuestClaim = async (questNum: 1 | 2 | 3, amount: number, event: React.MouseEvent<HTMLButtonElement>) => {
     const newBalance = birdBalance + amount
     window.localStorage.setItem('happy-bird-ton-bird-balance', String(newBalance))
     setBirdBalance(newBalance)
@@ -516,6 +575,9 @@ function App() {
     sfx.playClaim()
     triggerCoinAnimation(event)
     triggerHaptic('success')
+
+    // Lập tức đồng bộ lên server sau khi claim quest
+    await syncAllDataToServer(newBalance)
   }
 
   const handleConfirmWithdraw = async () => {
@@ -621,7 +683,7 @@ function App() {
     playerNameRef.current = telegramUser
   }, [telegramUser])
 
-  // Automatically sync profile to MongoDB on wallet connection or Telegram login (resolving cross-device overwrites)
+  // Automatically sync profile to MongoDB on wallet connection or Telegram login (resolving cross-device overwrites for all data)
   useEffect(() => {
     const syncProfileOnLoad = async () => {
       const apiUrl = import.meta.env.VITE_API_URL
@@ -633,7 +695,8 @@ function App() {
 
       const localScore = Number(window.localStorage.getItem(BEST_SCORE_KEY) || '0')
       const telegramId = telegramWebApp?.initDataUnsafe?.user?.id?.toString() || ""
-      const username = telegramWebApp?.initDataUnsafe?.user?.username || ""
+
+      const todayStr = new Date().toDateString()
 
       try {
         // Step 1: Fetch existing profile from server first
@@ -656,7 +719,6 @@ function App() {
             setBirdBalance(serverProfile.birdBalance)
             window.localStorage.setItem('happy-bird-ton-bird-balance', String(serverProfile.birdBalance))
           } else if (birdBalance > serverProfile.birdBalance) {
-            // Client has higher balance (e.g. offline claims), we need to update server
             needsUpdateOnServer = true
           }
 
@@ -667,31 +729,116 @@ function App() {
             setBestScore(serverProfile.bestScore)
             window.localStorage.setItem(BEST_SCORE_KEY, String(serverProfile.bestScore))
           } else if (localScore > serverProfile.bestScore) {
-            // Client has broken record offline, we need to update server
             needsUpdateOnServer = true
           }
 
-          // If client data is ahead of server, or we just connected a wallet and want to update meta info
+          // Step 2: Cross-device synchronization for daily quests and streak
+          // If server has a quest state saved for today, we sync it
+          if (serverProfile.questDate === todayStr) {
+            // Streak sync
+            if (serverProfile.streak > streak) {
+              setStreak(serverProfile.streak)
+              window.localStorage.setItem('happy-bird-ton-streak', String(serverProfile.streak))
+              window.localStorage.setItem('happy-bird-ton-last-checkin-date', serverProfile.lastCheckInDate || "")
+            } else if (streak > (serverProfile.streak || 0)) {
+              needsUpdateOnServer = true
+            }
+
+            // Games played today
+            const localGames = Number(window.localStorage.getItem('happy-bird-ton-games-today') || '0')
+            if (serverProfile.gamesPlayedToday > localGames) {
+              setGamesPlayedToday(serverProfile.gamesPlayedToday)
+              window.localStorage.setItem('happy-bird-ton-games-today', String(serverProfile.gamesPlayedToday))
+            } else if (localGames > (serverProfile.gamesPlayedToday || 0)) {
+              needsUpdateOnServer = true
+            }
+
+            // Record broken today
+            const localRecord = window.localStorage.getItem('happy-bird-ton-record-broken-today') === 'true'
+            if (serverProfile.recordBrokenToday && !localRecord) {
+              setRecordBrokenToday(true)
+              window.localStorage.setItem('happy-bird-ton-record-broken-today', 'true')
+            } else if (localRecord && !serverProfile.recordBrokenToday) {
+              needsUpdateOnServer = true
+            }
+
+            // Points accumulated today
+            const localPoints = Number(window.localStorage.getItem('happy-bird-ton-points-accumulated-today') || '0')
+            if (serverProfile.pointsAccumulatedToday > localPoints) {
+              setPointsAccumulatedToday(serverProfile.pointsAccumulatedToday)
+              window.localStorage.setItem('happy-bird-ton-points-accumulated-today', String(serverProfile.pointsAccumulatedToday))
+            } else if (localPoints > (serverProfile.pointsAccumulatedToday || 0)) {
+              needsUpdateOnServer = true
+            }
+
+            // Tracked flights today
+            const localTracked = Number(window.localStorage.getItem('happy-bird-ton-games-tracked-points') || '0')
+            if (serverProfile.gamesTrackedForPoints > localTracked) {
+              setGamesTrackedForPoints(serverProfile.gamesTrackedForPoints)
+              window.localStorage.setItem('happy-bird-ton-games-tracked-points', String(serverProfile.gamesTrackedForPoints))
+            } else if (localTracked > (serverProfile.gamesTrackedForPoints || 0)) {
+              needsUpdateOnServer = true
+            }
+
+            // Checked-in status today
+            const localChecked = window.localStorage.getItem('happy-bird-ton-checked-in-today') === 'true'
+            if (serverProfile.checkedInToday && !localChecked) {
+              setCheckedInToday(true)
+              window.localStorage.setItem('happy-bird-ton-checked-in-today', 'true')
+            } else if (localChecked && !serverProfile.checkedInToday) {
+              needsUpdateOnServer = true
+            }
+
+            // Played first game status
+            const localPlayed = window.localStorage.getItem('happy-bird-ton-played-first-game') === 'true'
+            if (serverProfile.playedFirstGameToday && !localPlayed) {
+              setHasPlayedFirstGameToday(true)
+              window.localStorage.setItem('happy-bird-ton-played-first-game', 'true')
+            } else if (localPlayed && !serverProfile.playedFirstGameToday) {
+              needsUpdateOnServer = true
+            }
+
+            // Quests claimed status
+            const localQ1 = window.localStorage.getItem('happy-bird-ton-quest1-claimed') === 'true'
+            if (serverProfile.quest1Claimed && !localQ1) {
+              setQuest1Claimed(true)
+              window.localStorage.setItem('happy-bird-ton-quest1-claimed', 'true')
+            } else if (localQ1 && !serverProfile.quest1Claimed) {
+              needsUpdateOnServer = true
+            }
+
+            const localQ2 = window.localStorage.getItem('happy-bird-ton-quest2-claimed') === 'true'
+            if (serverProfile.quest2Claimed && !localQ2) {
+              setQuest2Claimed(true)
+              window.localStorage.setItem('happy-bird-ton-quest2-claimed', 'true')
+            } else if (localQ2 && !serverProfile.quest2Claimed) {
+              needsUpdateOnServer = true
+            }
+
+            const localQ3 = window.localStorage.getItem('happy-bird-ton-quest3-claimed') === 'true'
+            if (serverProfile.quest3Claimed && !localQ3) {
+              setQuest3Claimed(true)
+              window.localStorage.setItem('happy-bird-ton-quest3-claimed', 'true')
+            } else if (localQ3 && !serverProfile.quest3Claimed) {
+              needsUpdateOnServer = true
+            }
+
+          } else {
+            // Server has quest data from a previous day or no quest date. 
+            // We should push the current client quest date and states to server if client date is valid
+            const localQuestDate = window.localStorage.getItem('happy-bird-ton-quest-date')
+            if (localQuestDate === todayStr) {
+              needsUpdateOnServer = true
+            }
+          }
+
+          // If client data is ahead of server, update server
           if (needsUpdateOnServer || !serverProfile.telegramId || !serverProfile.username) {
-            await fetch(`${apiUrl}/api/leaderboard`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                player, 
-                bestScore: updatedBestScore, 
-                telegramId, 
-                username, 
-                birdBalance: updatedBalance 
-              }),
-            })
+            await syncAllDataToServer(updatedBalance, updatedBestScore)
           }
         } else if (profileRes.status === 404) {
           // Profile doesn't exist yet on server, create it with local data
-          await fetch(`${apiUrl}/api/leaderboard`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ player, bestScore: localScore, telegramId, username, birdBalance }),
-          })
+          await syncAllDataToServer(birdBalance, localScore)
         }
 
         // Fetch refreshed leaderboard to update local state
@@ -769,21 +916,8 @@ function App() {
         return updated
       })
 
-      const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id?.toString() || ""
-      const username = window.Telegram?.WebApp?.initDataUnsafe?.user?.username || ""
-
-      const apiUrl = import.meta.env.VITE_API_URL
-      if (apiUrl) {
-        try {
-          await fetch(`${apiUrl}/api/leaderboard`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ player, bestScore: nextScore, telegramId, username, birdBalance: birdBalanceRef.current }),
-          })
-        } catch (err) {
-          console.error('Failed to sync score with server:', err)
-        }
-      }
+      // Sync all data to server (including new high score and daily quest progress)
+      await syncAllDataToServer(birdBalanceRef.current, nextScore)
     }
 
     const resetGame = (phase: GamePhase) => {

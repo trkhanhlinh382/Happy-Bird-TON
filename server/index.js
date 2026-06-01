@@ -17,7 +17,7 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Expanded schema to store Telegram meta, ban status, and BIRD balance
+// Expanded schema to store Telegram meta, ban status, BIRD balance, and daily quest/streak sync state
 const leaderboardSchema = new mongoose.Schema({
   player: { type: String, required: true, unique: true },
   bestScore: { type: Number, required: true },
@@ -25,7 +25,21 @@ const leaderboardSchema = new mongoose.Schema({
   username: { type: String },
   banned: { type: Boolean, default: false },
   birdBalance: { type: Number, default: 0 },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  
+  // Daily quest and check-in streak sync fields
+  streak: { type: Number, default: 0 },
+  lastCheckInDate: { type: String, default: "" },
+  questDate: { type: String, default: "" },
+  gamesPlayedToday: { type: Number, default: 0 },
+  recordBrokenToday: { type: Boolean, default: false },
+  pointsAccumulatedToday: { type: Number, default: 0 },
+  gamesTrackedForPoints: { type: Number, default: 0 },
+  quest1Claimed: { type: Boolean, default: false },
+  quest2Claimed: { type: Boolean, default: false },
+  quest3Claimed: { type: Boolean, default: false },
+  checkedInToday: { type: Boolean, default: false },
+  playedFirstGameToday: { type: Boolean, default: false }
 });
 
 const Leaderboard = mongoose.model('Leaderboard', leaderboardSchema);
@@ -165,9 +179,28 @@ app.get('/api/user/profile', async (req, res) => {
   }
 });
 
-// Submit or update score
+// Submit or update score and daily quest/streak data
 app.post('/api/leaderboard', async (req, res) => {
-  const { player, bestScore, telegramId, username, birdBalance } = req.body;
+  const { 
+    player, 
+    bestScore, 
+    telegramId, 
+    username, 
+    birdBalance,
+    streak,
+    lastCheckInDate,
+    questDate,
+    gamesPlayedToday,
+    recordBrokenToday,
+    pointsAccumulatedToday,
+    gamesTrackedForPoints,
+    quest1Claimed,
+    quest2Claimed,
+    quest3Claimed,
+    checkedInToday,
+    playedFirstGameToday
+  } = req.body;
+
   if (!player || typeof bestScore !== 'number') {
     return res.status(400).json({ error: 'Invalid payload' });
   }
@@ -181,13 +214,45 @@ app.post('/api/leaderboard', async (req, res) => {
     }
 
     if (!entry) {
-      entry = new Leaderboard({ player, bestScore, telegramId, username, birdBalance: birdBalance || 0 });
+      entry = new Leaderboard({ 
+        player, 
+        bestScore, 
+        telegramId, 
+        username, 
+        birdBalance: birdBalance || 0,
+        streak: streak || 0,
+        lastCheckInDate: lastCheckInDate || "",
+        questDate: questDate || "",
+        gamesPlayedToday: gamesPlayedToday || 0,
+        recordBrokenToday: recordBrokenToday || false,
+        pointsAccumulatedToday: pointsAccumulatedToday || 0,
+        gamesTrackedForPoints: gamesTrackedForPoints || 0,
+        quest1Claimed: quest1Claimed || false,
+        quest2Claimed: quest2Claimed || false,
+        quest3Claimed: quest3Claimed || false,
+        checkedInToday: checkedInToday || false,
+        playedFirstGameToday: playedFirstGameToday || false
+      });
     } else {
       // Sync telegram info if provided
       if (telegramId) entry.telegramId = telegramId;
       if (username) entry.username = username;
       if (typeof birdBalance === 'number') entry.birdBalance = birdBalance;
       
+      // Update daily quests and streak
+      if (typeof streak === 'number') entry.streak = streak;
+      if (typeof lastCheckInDate === 'string') entry.lastCheckInDate = lastCheckInDate;
+      if (typeof questDate === 'string') entry.questDate = questDate;
+      if (typeof gamesPlayedToday === 'number') entry.gamesPlayedToday = gamesPlayedToday;
+      if (typeof recordBrokenToday === 'boolean') entry.recordBrokenToday = recordBrokenToday;
+      if (typeof pointsAccumulatedToday === 'number') entry.pointsAccumulatedToday = pointsAccumulatedToday;
+      if (typeof gamesTrackedForPoints === 'number') entry.gamesTrackedForPoints = gamesTrackedForPoints;
+      if (typeof quest1Claimed === 'boolean') entry.quest1Claimed = quest1Claimed;
+      if (typeof quest2Claimed === 'boolean') entry.quest2Claimed = quest2Claimed;
+      if (typeof quest3Claimed === 'boolean') entry.quest3Claimed = quest3Claimed;
+      if (typeof checkedInToday === 'boolean') entry.checkedInToday = checkedInToday;
+      if (typeof playedFirstGameToday === 'boolean') entry.playedFirstGameToday = playedFirstGameToday;
+
       // Update highscore
       if (bestScore > entry.bestScore) {
         entry.bestScore = bestScore;
