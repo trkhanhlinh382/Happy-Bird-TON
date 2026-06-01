@@ -510,6 +510,27 @@ function App() {
     triggerHaptic('success')
   }
 
+  const handleWithdrawSuccess = (amount: number) => {
+    const newBalance = Math.max(0, birdBalance - amount)
+    window.localStorage.setItem('happy-bird-ton-bird-balance', String(newBalance))
+    setBirdBalance(newBalance)
+
+    const player = telegramUser
+    if (player !== 'Guest pilot') {
+      const localScore = Number(window.localStorage.getItem(BEST_SCORE_KEY) || '0')
+      const telegramId = telegramWebApp?.initDataUnsafe?.user?.id?.toString() || ""
+      const username = telegramWebApp?.initDataUnsafe?.user?.username || ""
+      const apiUrl = import.meta.env.VITE_API_URL
+      if (apiUrl) {
+        fetch(`${apiUrl}/api/leaderboard`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ player, bestScore: localScore, telegramId, username, birdBalance: newBalance }),
+        }).catch((err) => console.error('Failed to sync balance after withdrawal:', err))
+      }
+    }
+  }
+
   /* --- Temporal Leaderboard filtering logic --- */
   const getFilteredLeaderboard = () => {
     return leaderboard
@@ -1054,6 +1075,7 @@ function App() {
           score={score}
           handleRecordScore={handleSubmitScore}
           txStatus={txStatus}
+          onWithdrawSuccess={handleWithdrawSuccess}
         />
 
         {/* ========================================================================= */}

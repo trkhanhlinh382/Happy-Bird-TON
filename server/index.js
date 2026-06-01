@@ -92,7 +92,9 @@ app.get('/api/leaderboard', async (req, res) => {
     const query = { banned: { $ne: true } };
 
     if (tab === 'daily') {
-      query.updatedAt = { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) };
+      const startOfUTCDay = new Date();
+      startOfUTCDay.setUTCHours(0, 0, 0, 0);
+      query.updatedAt = { $gte: startOfUTCDay };
     } else if (tab === 'weekly') {
       query.updatedAt = { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
     } else if (tab === 'monthly') {
