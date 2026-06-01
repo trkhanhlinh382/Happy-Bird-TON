@@ -313,8 +313,8 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
         </p>
       </article>
 
-      {/* Score submission */}
-      {gamePhase === 'gameover' && isTestnetWallet && (
+      {/* Score submission (Temporarily hidden) */}
+      {false && gamePhase === 'gameover' && isTestnetWallet && (
         <article className="info-card reward-card" style={{ marginTop: '16px' }}>
           <span className="card-label">BLOCKCHAIN DECK</span>
           <h3>Submit Score</h3>
