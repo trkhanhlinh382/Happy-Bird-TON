@@ -529,6 +529,81 @@ function App() {
     }
   }
 
+  // Automatically check and resolve pending withdrawals from blockchain history (resolving mobile bridge freezes)
+  const checkPendingWithdrawal = useCallback(async () => {
+    const pendingData = window.localStorage.getItem('happy-bird-ton-pending-withdraw')
+    if (!pendingData || !walletAddress) return
+
+    try {
+      const { amount, timestamp, wallet } = JSON.parse(pendingData)
+      
+      // Only check if it belongs to current connected wallet and is within last 1 hour
+      if (wallet !== walletAddress || Date.now() - timestamp > 3600000) {
+        window.localStorage.removeItem('happy-bird-ton-pending-withdraw')
+        return
+      }
+
+      const contractAddress = import.meta.env.VITE_BIRD_REWARD_CONTRACT || 'EQCXDZxPPN3W9RU8WpQu_cKAnP7lBaQD8n0me5zj-4eNotiA'
+      
+      // Fetch user's transaction history from public TON Testnet API
+      const res = await fetch(`https://testnet.toncenter.com/api/v2/getTransactions?address=${walletAddress}&limit=10`)
+      if (!res.ok) return
+
+      const data = await res.json()
+      if (!data.ok || !Array.isArray(data.result)) return
+
+      // Find successful transaction to contractAddress with 0.05 TON after timestamp
+      const foundTx = data.result.find((tx: any) => {
+        const txTime = tx.utime * 1000
+        if (txTime < timestamp - 60000) return false // clock skew allowance
+        
+        if (Array.isArray(tx.out_msgs)) {
+          return tx.out_msgs.some((msg: any) => {
+            const isMatchDest = msg.destination && 
+              (msg.destination.toLowerCase() === contractAddress.toLowerCase() ||
+               msg.destination.includes(contractAddress.slice(2, 10)))
+            const isMatchValue = msg.value === '50000000' || msg.value === 50000000
+            return isMatchDest && isMatchValue
+          })
+        }
+        return false
+      })
+
+      if (foundTx) {
+        const newBalance = Math.max(0, birdBalance - amount)
+        window.localStorage.setItem('happy-bird-ton-bird-balance', String(newBalance))
+        setBirdBalance(newBalance)
+        
+        // Sync new balance to server database
+        await syncAllDataToServer(newBalance)
+        
+        window.localStorage.removeItem('happy-bird-ton-pending-withdraw')
+        alert(`🎉 Phát hiện giao dịch rút tiền thành công trên Blockchain! Số dư game đã được tự động đồng bộ (Trừ ${amount} BIRD).`)
+      }
+    } catch (err) {
+      console.error('Failed to verify pending withdrawal:', err)
+    }
+  }, [walletAddress, birdBalance])
+
+  // Hook to trigger pending withdrawal checks on visibility/focus change
+  useEffect(() => {
+    checkPendingWithdrawal()
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkPendingWithdrawal()
+      }
+    }
+
+    window.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', checkPendingWithdrawal)
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', checkPendingWithdrawal)
+    }
+  }, [checkPendingWithdrawal])
+
   /* --- Claims Handler --- */
   const handleCheckInClaim = async (event: React.MouseEvent<HTMLButtonElement>) => {
     if (checkedInToday || !hasPlayedFirstGameToday) return
@@ -603,6 +678,14 @@ function App() {
     setIsWithdrawing(true)
     setWithdrawTxStatus('idle')
 
+    // Tự động lưu trạng thái chờ (Pending) trước khi gọi Ton Connect để chống lỗi đứt Bridge khi chuyển app
+    const pendingWithdraw = {
+      amount: withdrawAmount,
+      timestamp: Date.now(),
+      wallet: walletAddress
+    }
+    window.localStorage.setItem('happy-bird-ton-pending-withdraw', JSON.stringify(pendingWithdraw))
+
     try {
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
@@ -613,6 +696,9 @@ function App() {
           }
         ]
       })
+
+      // Giao dịch thành công, làm sạch cờ pending
+      window.localStorage.removeItem('happy-bird-ton-pending-withdraw')
 
       const newBalance = Math.max(0, birdBalance - withdrawAmount)
       window.localStorage.setItem('happy-bird-ton-bird-balance', String(newBalance))
