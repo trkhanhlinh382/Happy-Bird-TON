@@ -59,6 +59,11 @@ function App() {
   const animationFrameRef = useRef<number | null>(null)
   const bestScoreRef = useRef(initialBestScore)
   const playerNameRef = useRef('Guest pilot')
+  const gamesPlayedTodayRef = useRef(0)
+  const pointsAccumulatedTodayRef = useRef(0)
+  const gamesTrackedForPointsRef = useRef(0)
+  const hasPlayedFirstGameTodayRef = useRef(false)
+  const birdBalanceRef = useRef(0)
   
   const controlsRef = useRef({
     flap: () => {},
@@ -140,6 +145,13 @@ function App() {
   const [leaderboardTab, setLeaderboardTab] = useState<'daily' | 'weekly' | 'monthly'>('daily')
   const [currentUserRank, setCurrentUserRank] = useState<number>(0)
   const [currentUserBestScore, setCurrentUserBestScore] = useState<number>(0)
+
+  // Keep refs in sync with state to avoid game loop useEffect teardowns
+  useEffect(() => { gamesPlayedTodayRef.current = gamesPlayedToday }, [gamesPlayedToday])
+  useEffect(() => { pointsAccumulatedTodayRef.current = pointsAccumulatedToday }, [pointsAccumulatedToday])
+  useEffect(() => { gamesTrackedForPointsRef.current = gamesTrackedForPoints }, [gamesTrackedForPoints])
+  useEffect(() => { hasPlayedFirstGameTodayRef.current = hasPlayedFirstGameToday }, [hasPlayedFirstGameToday])
+  useEffect(() => { birdBalanceRef.current = birdBalance }, [birdBalance])
 
   /* --- Admin Portal State --- */
   const [adminSubTab, setAdminSubTab] = useState<'users' | 'events' | 'notifications'>('users')
@@ -639,7 +651,7 @@ function App() {
           await fetch(`${apiUrl}/api/leaderboard`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ player, bestScore: nextScore, telegramId, username, birdBalance }),
+            body: JSON.stringify({ player, bestScore: nextScore, telegramId, username, birdBalance: birdBalanceRef.current }),
           })
         } catch (err) {
           console.error('Failed to sync score with server:', err)
@@ -681,7 +693,7 @@ function App() {
       const isNewRecord = current.score > bestScoreRef.current
 
       // Gameover quests stats increment
-      const nextGamesPlayed = gamesPlayedToday + 1
+      const nextGamesPlayed = gamesPlayedTodayRef.current + 1
       window.localStorage.setItem('happy-bird-ton-games-today', String(nextGamesPlayed))
       setGamesPlayedToday(nextGamesPlayed)
 
@@ -691,9 +703,9 @@ function App() {
       }
 
       // Accumulate score in first 3 games
-      if (gamesTrackedForPoints < 3) {
-        const nextAccumulated = pointsAccumulatedToday + current.score
-        const nextTracked = gamesTrackedForPoints + 1
+      if (gamesTrackedForPointsRef.current < 3) {
+        const nextAccumulated = pointsAccumulatedTodayRef.current + current.score
+        const nextTracked = gamesTrackedForPointsRef.current + 1
         window.localStorage.setItem('happy-bird-ton-points-accumulated-today', String(nextAccumulated))
         window.localStorage.setItem('happy-bird-ton-games-tracked-points', String(nextTracked))
         setPointsAccumulatedToday(nextAccumulated)
@@ -721,7 +733,7 @@ function App() {
       if (current.phase === 'idle') {
         // Daily Check-in play trigger
         checkDailyReset()
-        if (!hasPlayedFirstGameToday) {
+        if (!hasPlayedFirstGameTodayRef.current) {
           window.localStorage.setItem('happy-bird-ton-played-first-game', 'true')
           setHasPlayedFirstGameToday(true)
         }
@@ -872,7 +884,7 @@ function App() {
       canvas.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [gamesPlayedToday, pointsAccumulatedToday, gamesTrackedForPoints, hasPlayedFirstGameToday])
+  }, [])
 
   // Estimating estimated rewards for Top leaderboard
   const getLeaderboardReward = (rank: number) => {
@@ -976,30 +988,30 @@ function App() {
                   </button>
                 </div>
               )}
-            </div>
 
-            {gamePhase === 'gameover' && gameoverPopup && (
-              <div className="gameover-popup" role="dialog" aria-live="polite">
-                <span className={`gameover-popup-tag ${gameoverPopup === 'record' ? 'record-tag' : ''}`}>
-                  {gameoverPopup === 'record' ? 'NEW RECORD' : 'GAME OVER'}
-                </span>
-                <h3>
-                  {gameoverPopup === 'record'
-                    ? 'BROKE THE BARRIER!'
-                    : 'CRASH LANDING'}
-                </h3>
-                <p>
-                  Score: <strong>{score}</strong> · Best: <strong>{bestScore}</strong>
-                </p>
-                <button
-                  type="button"
-                  className="secondary-button primary-glow"
-                  onClick={() => controlsRef.current.flap()}
-                >
-                  FLY AGAIN
-                </button>
-              </div>
-            )}
+              {gamePhase === 'gameover' && gameoverPopup && (
+                <div className="gameover-popup" role="dialog" aria-live="polite">
+                  <span className={`gameover-popup-tag ${gameoverPopup === 'record' ? 'record-tag' : ''}`}>
+                    {gameoverPopup === 'record' ? 'NEW RECORD' : 'GAME OVER'}
+                  </span>
+                  <h3>
+                    {gameoverPopup === 'record'
+                      ? 'BROKE THE BARRIER!'
+                      : 'CRASH LANDING'}
+                  </h3>
+                  <p>
+                    Score: <strong>{score}</strong> · Best: <strong>{bestScore}</strong>
+                  </p>
+                  <button
+                    type="button"
+                    className="secondary-button primary-glow"
+                    onClick={() => controlsRef.current.flap()}
+                  >
+                    FLY AGAIN
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
