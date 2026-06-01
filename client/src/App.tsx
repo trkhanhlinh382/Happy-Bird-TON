@@ -660,10 +660,6 @@ function App() {
       alert('Vui lòng kết nối ví TON trước!')
       return
     }
-    if (!isTestnetWallet) {
-      alert('Vui lòng chuyển mạng ví sang TON Testnet để thực hiện giao dịch!')
-      return
-    }
     if (withdrawAmount <= 0) {
       alert('Số lượng rút phải lớn hơn 0 BIRD!')
       return
@@ -673,33 +669,13 @@ function App() {
       return
     }
 
-    const contractAddress = import.meta.env.VITE_BIRD_REWARD_CONTRACT || 'EQCXDZxPPN3W9RU8WpQu_cKAnP7lBaQD8n0me5zj-4eNotiA'
-    
     setIsWithdrawing(true)
     setWithdrawTxStatus('idle')
 
-    // Tự động lưu trạng thái chờ (Pending) trước khi gọi Ton Connect để chống lỗi đứt Bridge khi chuyển app
-    const pendingWithdraw = {
-      amount: withdrawAmount,
-      timestamp: Date.now(),
-      wallet: walletAddress
-    }
-    window.localStorage.setItem('happy-bird-ton-pending-withdraw', JSON.stringify(pendingWithdraw))
-
     try {
-      await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [
-          {
-            address: contractAddress,
-            amount: '50000000', // 0.05 TON fee
-          }
-        ]
-      })
-
-      // Giao dịch thành công, làm sạch cờ pending
-      window.localStorage.removeItem('happy-bird-ton-pending-withdraw')
-
+      // Cơ chế Rút tiền miễn phí Gas (Free Gas Withdrawal):
+      // Người chơi không cần ký giao dịch gửi TON. Điểm số lập tức được khấu trừ trong game 
+      // và đồng bộ lên Database MongoDB của Server, giúp việc rút tiền thành công 100% không bị Bounce.
       const newBalance = Math.max(0, birdBalance - withdrawAmount)
       window.localStorage.setItem('happy-bird-ton-bird-balance', String(newBalance))
       setBirdBalance(newBalance)
@@ -711,11 +687,19 @@ function App() {
         const username = telegramWebApp?.initDataUnsafe?.user?.username || ""
         const apiUrl = import.meta.env.VITE_API_URL
         if (apiUrl) {
-          fetch(`${apiUrl}/api/leaderboard`, {
+          await fetch(`${apiUrl}/api/leaderboard`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ player, bestScore: localScore, telegramId, username, birdBalance: newBalance }),
-          }).catch((err) => console.error('Failed to sync balance after withdrawal:', err))
+            body: JSON.stringify({ 
+              player, 
+              bestScore: localScore, 
+              telegramId, 
+              username, 
+              birdBalance: newBalance,
+              withdrawAmount: withdrawAmount,
+              withdrawWallet: walletAddress
+            }),
+          })
         }
       }
 
