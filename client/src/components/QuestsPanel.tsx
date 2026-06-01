@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { TonConnectButton, useTonConnectUI } from '@tonconnect/ui-react'
+import React from 'react'
+import { TonConnectButton } from '@tonconnect/ui-react'
 
 interface QuestsPanelProps {
   activeTab: string
@@ -31,7 +31,7 @@ interface QuestsPanelProps {
   score: number
   handleRecordScore: () => void
   txStatus: string
-  onWithdrawSuccess: (amount: number) => void
+  onRequestWithdraw: () => void
 }
 
 export const QuestsPanel: React.FC<QuestsPanelProps> = ({
@@ -62,66 +62,8 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
   score,
   handleRecordScore,
   txStatus,
-  onWithdrawSuccess
+  onRequestWithdraw
 }) => {
-  const [tonConnectUI] = useTonConnectUI()
-  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false)
-  const [withdrawAmount, setWithdrawAmount] = useState(birdBalance)
-  const [isWithdrawing, setIsWithdrawing] = useState(false)
-  const [withdrawTxStatus, setWithdrawTxStatus] = useState<'idle' | 'success' | 'error'>('idle')
-
-  useEffect(() => {
-    setWithdrawAmount(birdBalance)
-  }, [birdBalance])
-
-  const handleConfirmWithdraw = async () => {
-    if (!wallet) {
-      alert('Vui lòng kết nối ví TON trước!')
-      return
-    }
-    if (!isTestnetWallet) {
-      alert('Vui lòng chuyển mạng ví sang TON Testnet để thực hiện giao dịch!')
-      return
-    }
-    if (withdrawAmount <= 0) {
-      alert('Số lượng rút phải lớn hơn 0 BIRD!')
-      return
-    }
-    if (withdrawAmount > birdBalance) {
-      alert('Số lượng rút vượt quá số dư khả dụng!')
-      return
-    }
-
-    const contractAddress = import.meta.env.VITE_BIRD_REWARD_CONTRACT || 'EQCXDZxPPN3W9RU8WpQu_cKAnP7lBaQD8n0me5zj-4eNotiA'
-    
-    setIsWithdrawing(true)
-    setWithdrawTxStatus('idle')
-
-    try {
-      await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [
-          {
-            address: contractAddress,
-            amount: '50000000', // 0.05 TON fee
-          }
-        ]
-      })
-
-      onWithdrawSuccess(withdrawAmount)
-      setWithdrawTxStatus('success')
-      setIsWithdrawing(false)
-      setTimeout(() => {
-        setIsWithdrawOpen(false)
-        setWithdrawTxStatus('idle')
-      }, 2500)
-    } catch (err) {
-      console.error('Withdrawal transaction error:', err)
-      setWithdrawTxStatus('error')
-      setIsWithdrawing(false)
-    }
-  }
-
   return (
     <section className={`info-page tab-panel ${activeTab === 'info' ? 'is-active' : ''}`}>
       
@@ -146,7 +88,7 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
               alert('Vui lòng kết nối ví TON Testnet của bạn trước khi rút tiền!')
               return
             }
-            setIsWithdrawOpen(true)
+            onRequestWithdraw()
           }}
           style={{
             width: '100%',
@@ -396,185 +338,6 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
             <p className="tx-error" style={{ color: 'var(--neon-pink)', fontSize: '0.8rem', marginTop: '8px' }}>Transaction failed. Try again.</p>
           )}
         </article>
-      )}
-
-      {/* Withdraw Modal */}
-      {isWithdrawOpen && (
-        <div className="withdraw-modal-overlay" style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(3, 8, 16, 0.85)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          padding: '16px',
-          boxSizing: 'border-box'
-        }}>
-          <div className="withdraw-modal-content" style={{
-            background: 'rgba(13, 22, 34, 0.95)',
-            border: '1.5px solid rgba(0, 210, 255, 0.35)',
-            boxShadow: '0 0 35px rgba(0, 210, 255, 0.25)',
-            borderRadius: '24px',
-            width: 'min(100%, 340px)',
-            padding: '24px',
-            boxSizing: 'border-box',
-            textAlign: 'center',
-            position: 'relative',
-            animation: 'popup-scale-in 0.25s cubic-bezier(0.2, 0.85, 0.2, 1) both'
-          }}>
-            <button 
-              type="button" 
-              onClick={() => setIsWithdrawOpen(false)}
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-muted)',
-                fontSize: '1.2rem',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                padding: '4px'
-              }}
-            >
-              ✕
-            </button>
-            
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '1.3rem', color: 'white', fontWeight: 800 }}>RÚT BIRD TOKEN</h3>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 20px 0' }}>
-              Chuyển số dư BIRD tích lũy off-chain thành Token Jetton on-chain trên ví TON của bạn.
-            </p>
-
-            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '16px', marginBottom: '20px', textAlign: 'left' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.8rem' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Khả dụng (Available):</span>
-                <strong style={{ color: 'var(--neon-blue)' }}>{birdBalance} BIRD</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.8rem' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Ví nhận (Receiver):</span>
-                <strong style={{ color: 'white' }} title={walletAddress}>{shortAddress(walletAddress)}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Mạng lưới (Network):</span>
-                <strong style={{ color: 'var(--neon-green)' }}>TON Testnet</strong>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '20px', textAlign: 'left' }}>
-              <label htmlFor="withdraw-amount-input" style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', fontWeight: 800 }}>Số lượng muốn rút:</label>
-              <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
-                <input
-                  id="withdraw-amount-input"
-                  type="number"
-                  min="1"
-                  max={birdBalance}
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(Math.max(0, Math.min(birdBalance, Number(e.target.value))))}
-                  style={{
-                    flex: 1,
-                    background: 'rgba(0, 0, 0, 0.25)',
-                    border: '1.5px solid rgba(0, 210, 255, 0.2)',
-                    borderRadius: '12px',
-                    padding: '12px 64px 12px 16px',
-                    color: 'white',
-                    fontSize: '1.1rem',
-                    fontWeight: 'bold',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setWithdrawAmount(birdBalance)}
-                  style={{
-                    position: 'absolute',
-                    right: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'rgba(0, 210, 255, 0.15)',
-                    border: '1px solid rgba(0, 210, 255, 0.3)',
-                    color: 'var(--neon-blue)',
-                    borderRadius: '6px',
-                    padding: '4px 8px',
-                    fontSize: '0.72rem',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
-                  }}
-                >
-                  MAX
-                </button>
-              </div>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
-                * Phí gas ước tính: ~0.05 TON để ký giao dịch đúc token.
-              </span>
-            </div>
-
-            <div style={{ marginTop: '24px' }}>
-              {withdrawTxStatus === 'success' ? (
-                <div style={{
-                  background: 'rgba(57, 225, 156, 0.1)',
-                  border: '1px solid var(--neon-green)',
-                  borderRadius: '12px',
-                  padding: '12px',
-                  color: 'var(--neon-green)',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px'
-                }}>
-                  ✅ RÚT TIỀN THÀNH CÔNG! ĐANG ĐÚC ON-CHAIN...
-                </div>
-              ) : withdrawTxStatus === 'error' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{
-                    background: 'rgba(255, 91, 127, 0.1)',
-                    border: '1px solid var(--neon-pink)',
-                    borderRadius: '12px',
-                    padding: '12px',
-                    color: 'var(--neon-pink)',
-                    fontSize: '0.85rem',
-                    fontWeight: 'bold'
-                  }}>
-                    ❌ GIAO DỊCH THẤT BẠI! Vui lòng thử lại.
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary-button primary-glow"
-                    onClick={handleConfirmWithdraw}
-                    style={{ width: '100%', height: '44px', cursor: 'pointer', fontWeight: 800 }}
-                  >
-                    RÚT LẠI (RETRY)
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="secondary-button primary-glow"
-                  onClick={handleConfirmWithdraw}
-                  disabled={isWithdrawing || withdrawAmount <= 0}
-                  style={{
-                    width: '100%',
-                    height: '44px',
-                    cursor: (isWithdrawing || withdrawAmount <= 0) ? 'not-allowed' : 'pointer',
-                    fontWeight: 800,
-                    opacity: (isWithdrawing || withdrawAmount <= 0) ? 0.5 : 1
-                  }}
-                >
-                  {isWithdrawing ? 'ĐANG XỬ LÝ...' : 'XÁC NHẬN RÚT (CONFIRM)'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
       )}
 
     </section>
