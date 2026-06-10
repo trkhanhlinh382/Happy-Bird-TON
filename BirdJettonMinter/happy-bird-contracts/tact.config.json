@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tact-lang/tact/main/src/config/configSchema.json",
+  "projects": [
+    {
+      "name": "BirdJettonMinter",
+      "path": "contracts/BirdJettonMinter.tact",
+      "output": "build/BirdJettonMinter",
+      "options": {
+        "debug": true,
+        "external": true
+      },
+      "mode": "full"
+    },
+    {
+      "name": "BirdReward",
+      "path": "contracts/BirdReward.tact",
+      "output": "build/BirdReward",
+      "options": {
+        "debug": true,
+        "external": true
+      },
+      "mode": "full"
+    }
+  ]
+}
