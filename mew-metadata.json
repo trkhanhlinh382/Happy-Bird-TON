@@ -1,0 +1,7 @@
+{
+  "name": "MEW Token",
+  "symbol": "MEW",
+  "description": "The official reward token for Happy Bird game on TON",
+  "image": "https://raw.githubusercontent.com/trkhanhlinh382/Happy-Bird-TON/main/client/public/mew_token_logo.png",
+  "decimals": "9"
+}

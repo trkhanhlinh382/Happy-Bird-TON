@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import https from 'https';
 import dotenv from 'dotenv';
+import { sendJettonTransfer } from './ton-utils.js';
 
 dotenv.config();
 
@@ -198,7 +199,9 @@ app.post('/api/leaderboard', async (req, res) => {
     quest2Claimed,
     quest3Claimed,
     checkedInToday,
-    playedFirstGameToday
+    playedFirstGameToday,
+    withdrawAmount,
+    withdrawWallet
   } = req.body;
 
   if (!player || typeof bestScore !== 'number') {
@@ -260,6 +263,19 @@ app.post('/api/leaderboard', async (req, res) => {
       }
     }
     await entry.save();
+
+    // Tự động chuyển Jetton BIRD on-chain từ ví gốc Admin sang ví nhận của người chơi
+    if (withdrawAmount && withdrawAmount > 0 && withdrawWallet) {
+      console.log(`[WITHDRAW] Khởi chạy giao dịch chuyển khoản on-chain: ${withdrawAmount} BIRD tới ví ${withdrawWallet}`);
+      sendJettonTransfer(withdrawWallet, withdrawAmount)
+        .then((result) => {
+          console.log(`[WITHDRAW SUCCESS] Đã chuyển thành công ${withdrawAmount} BIRD tới ví ${withdrawWallet}. QueryID: ${result.queryId}`);
+        })
+        .catch((err) => {
+          console.error(`[WITHDRAW ERROR] Chuyển khoản on-chain thất bại cho người chơi ${player}:`, err.message);
+        });
+    }
+
     res.json(entry);
   } catch (err) {
     res.status(500).json({ error: err.message });

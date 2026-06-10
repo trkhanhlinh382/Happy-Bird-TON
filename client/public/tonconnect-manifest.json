@@ -1,7 +1,7 @@
 {
-  "url": "https://your-public-domain.example",
+  "url": "http://localhost:5173",
   "name": "Happy Bird TON",
-  "iconUrl": "https://your-public-domain.example/favicon.svg",
-  "termsOfUseUrl": "https://your-public-domain.example",
-  "privacyPolicyUrl": "https://your-public-domain.example"
+  "iconUrl": "http://localhost:5173/favicon.svg",
+  "termsOfUseUrl": "http://localhost:5173",
+  "privacyPolicyUrl": "http://localhost:5173"
 }
