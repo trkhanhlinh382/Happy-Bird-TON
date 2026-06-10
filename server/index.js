@@ -404,7 +404,8 @@ app.post('/api/admin/notifications/broadcast', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+export default app;

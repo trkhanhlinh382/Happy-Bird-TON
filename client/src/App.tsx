@@ -681,26 +681,24 @@ function App() {
       setBirdBalance(newBalance)
 
       const player = telegramUser
-      if (player !== 'Guest pilot') {
-        const localScore = Number(window.localStorage.getItem(BEST_SCORE_KEY) || '0')
-        const telegramId = telegramWebApp?.initDataUnsafe?.user?.id?.toString() || ""
-        const username = telegramWebApp?.initDataUnsafe?.user?.username || ""
-        const apiUrl = import.meta.env.VITE_API_URL
-        if (apiUrl) {
-          await fetch(`${apiUrl}/api/leaderboard`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              player, 
-              bestScore: localScore, 
-              telegramId, 
-              username, 
-              birdBalance: newBalance,
-              withdrawAmount: withdrawAmount,
-              withdrawWallet: walletAddress
-            }),
-          })
-        }
+      const localScore = Number(window.localStorage.getItem(BEST_SCORE_KEY) || '0')
+      const telegramId = telegramWebApp?.initDataUnsafe?.user?.id?.toString() || ""
+      const username = telegramWebApp?.initDataUnsafe?.user?.username || ""
+      const apiUrl = import.meta.env.VITE_API_URL
+      if (apiUrl) {
+        await fetch(`${apiUrl}/api/leaderboard`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            player, 
+            bestScore: localScore, 
+            telegramId, 
+            username, 
+            birdBalance: newBalance,
+            withdrawAmount: withdrawAmount,
+            withdrawWallet: walletAddress
+          }),
+        })
       }
 
       setWithdrawTxStatus('success')
