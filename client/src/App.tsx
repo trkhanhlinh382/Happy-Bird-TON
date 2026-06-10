@@ -149,6 +149,7 @@ function App() {
   const [withdrawAmount, setWithdrawAmount] = useState(0)
   const [isWithdrawing, setIsWithdrawing] = useState(false)
   const [withdrawTxStatus, setWithdrawTxStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [withdrawErrorMsg, setWithdrawErrorMsg] = useState('')
 
   useEffect(() => {
     setWithdrawAmount(birdBalance)
@@ -671,35 +672,50 @@ function App() {
 
     setIsWithdrawing(true)
     setWithdrawTxStatus('idle')
+    setWithdrawErrorMsg('')
 
     try {
-      // Cơ chế Rút tiền miễn phí Gas (Free Gas Withdrawal):
-      // Người chơi không cần ký giao dịch gửi TON. Điểm số lập tức được khấu trừ trong game 
-      // và đồng bộ lên Database MongoDB của Server, giúp việc rút tiền thành công 100% không bị Bounce.
-      const newBalance = Math.max(0, birdBalance - withdrawAmount)
-      window.localStorage.setItem('happy-bird-ton-bird-balance', String(newBalance))
-      setBirdBalance(newBalance)
-
       const player = telegramUser
       const localScore = Number(window.localStorage.getItem(BEST_SCORE_KEY) || '0')
       const telegramId = telegramWebApp?.initDataUnsafe?.user?.id?.toString() || ""
       const username = telegramWebApp?.initDataUnsafe?.user?.username || ""
       const apiUrl = import.meta.env.VITE_API_URL
-      if (apiUrl) {
-        await fetch(`${apiUrl}/api/leaderboard`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            player, 
-            bestScore: localScore, 
-            telegramId, 
-            username, 
-            birdBalance: newBalance,
-            withdrawAmount: withdrawAmount,
-            withdrawWallet: walletAddress
-          }),
-        })
+      
+      if (!apiUrl) {
+        throw new Error('Chưa cấu hình API Backend (Thiếu biến môi trường VITE_API_URL). Vui lòng thêm VITE_API_URL vào trang quản trị Vercel.')
       }
+
+      const newBalance = Math.max(0, birdBalance - withdrawAmount)
+
+      // Gửi yêu cầu lên server
+      const res = await fetch(`${apiUrl}/api/leaderboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          player, 
+          bestScore: localScore, 
+          telegramId, 
+          username, 
+          birdBalance: newBalance,
+          withdrawAmount: withdrawAmount,
+          withdrawWallet: walletAddress
+        }),
+      })
+
+      if (!res.ok) {
+        let errorMsg = `Lỗi hệ thống (${res.status})`
+        try {
+          const errData = await res.json()
+          if (errData && errData.error) {
+            errorMsg = errData.error
+          }
+        } catch (_) {}
+        throw new Error(errorMsg)
+      }
+
+      // Chỉ khấu trừ số dư khi backend đã xử lý và phản hồi thành công (200 OK)
+      window.localStorage.setItem('happy-bird-ton-bird-balance', String(newBalance))
+      setBirdBalance(newBalance)
 
       setWithdrawTxStatus('success')
       setIsWithdrawing(false)
@@ -707,8 +723,9 @@ function App() {
         setIsWithdrawOpen(false)
         setWithdrawTxStatus('idle')
       }, 2500)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Withdrawal transaction error:', err)
+      setWithdrawErrorMsg(err.message || 'Đã xảy ra lỗi không rõ nguyên nhân khi kết nối server.')
       setWithdrawTxStatus('error')
       setIsWithdrawing(false)
     }
@@ -1596,8 +1613,8 @@ function App() {
                 </div>
 
                 {withdrawTxStatus === 'error' && (
-                  <div style={{ color: '#ff5b7f', background: 'rgba(255, 91, 127, 0.08)', border: '1px solid rgba(255, 91, 127, 0.2)', padding: '10px 12px', borderRadius: '12px', fontSize: '0.75rem', marginBottom: '16px', lineHeight: '1.4' }}>
-                    ⚠️ Giao dịch thất bại. Hãy chắc chắn rằng ví của bạn có đủ 0.05 TON Testnet và thử lại.
+                  <div style={{ color: '#ff5b7f', background: 'rgba(255, 91, 127, 0.08)', border: '1px solid rgba(255, 91, 127, 0.2)', padding: '10px 12px', borderRadius: '12px', fontSize: '0.75rem', marginBottom: '16px', lineHeight: '1.4', wordBreak: 'break-word' }}>
+                    ⚠️ Thất bại: {withdrawErrorMsg || 'Không thể thực hiện rút tiền. Vui lòng thử lại sau.'}
                   </div>
                 )}
 
