@@ -1,7 +1,7 @@
 {
-  "url": "http://localhost:5173",
+  "url": "https://happy-bird-ton.vercel.app",
   "name": "Happy Bird TON",
-  "iconUrl": "http://localhost:5173/favicon.svg",
-  "termsOfUseUrl": "http://localhost:5173",
-  "privacyPolicyUrl": "http://localhost:5173"
+  "iconUrl": "https://happy-bird-ton.vercel.app/favicon.svg",
+  "termsOfUseUrl": "https://happy-bird-ton.vercel.app",
+  "privacyPolicyUrl": "https://happy-bird-ton.vercel.app"
 }
