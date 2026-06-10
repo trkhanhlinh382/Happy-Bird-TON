@@ -1,11 +1,17 @@
 // ton-utils.js - Xử lý giao dịch Jetton trên TON từ Node.js backend
-import { TonClient, WalletContractV4, Address, beginCell, toNano } from '@ton/ton';
+import { TonClient, WalletContractV4, Address, beginCell, toNano, internal } from '@ton/ton';
 import { mnemonicToPrivateKey } from '@ton/crypto';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const client = new TonClient({ endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC' });
+const apiKey = process.env.TONCENTER_API_KEY || "";
+const client = new TonClient({ 
+  endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC',
+  apiKey: apiKey
+});
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Khởi tạo ví Admin của Server từ Mnemonic trong hợp đồng
 const mnemonic = "twelve slender sleep same fabric curtain pipe bicycle detect kite erupt inspire round ride clutch regret wrong fog sun gold treat ramp castle galaxy";
@@ -74,19 +80,21 @@ export async function sendJettonTransfer(userAddressStr, amount) {
       .storeBit(false)                // forward_payload (không dùng)
       .endCell();
 
+    await sleep(1500); // Tránh rate limit của public RPC khi gọi seqno liên tiếp
     const seqno = await contract.getSeqno();
     console.log(`[TON] Gửi giao dịch chuyển ${amount} BIRD... Seqno: ${seqno}`);
     
+    await sleep(1500); // Tránh rate limit trước khi broadcast sendBoc
     await contract.sendTransfer({
       secretKey: keyPair.secretKey,
       seqno,
       messages: [
-        {
+        internal({
           to: adminJettonWallet,
           value: toNano('0.05'), // Phí gas giao dịch gửi đi
           bounce: true,
           body: payload,
-        }
+        })
       ]
     });
     
