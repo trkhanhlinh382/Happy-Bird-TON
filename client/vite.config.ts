@@ -9,6 +9,12 @@ export default defineConfig(({ mode }) => {
   const appUrl = env.VITE_APP_URL?.replace(/\/$/, '') || 'http://localhost:5173'
 
   return {
+    server: {
+      cors: true,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      },
+    },
     plugins: [
       react(),
       {
@@ -28,6 +34,33 @@ export default defineConfig(({ mode }) => {
               2,
             ),
           )
+        },
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            if (req.url === '/tonconnect-manifest.json') {
+              const protocol = req.headers['x-forwarded-proto'] || 'http'
+              const host = req.headers.host || 'localhost:5173'
+              const dynamicUrl = `${protocol}://${host}`
+              
+              res.setHeader('Content-Type', 'application/json')
+              res.setHeader('Access-Control-Allow-Origin', '*')
+              res.end(
+                JSON.stringify(
+                  {
+                    url: dynamicUrl,
+                    name: 'Happy Bird TON',
+                    iconUrl: `${dynamicUrl}/favicon.svg`,
+                    termsOfUseUrl: dynamicUrl,
+                    privacyPolicyUrl: dynamicUrl,
+                  },
+                  null,
+                  2,
+                ),
+              )
+              return
+            }
+            next()
+          })
         },
       },
     ],
