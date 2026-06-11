@@ -14,9 +14,55 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/happybird'
 app.use(cors());
 app.use(express.json());
 
+mongoose.set('bufferCommands', false);
+
 mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
+
+// Middleware to ensure database connection is ready before processing requests
+app.use(async (req, res, next) => {
+  if (req.path === '/api/diagnostics') {
+    return next();
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+
+  console.log('Database not connected. Ready state:', mongoose.connection.readyState);
+
+  try {
+    if (mongoose.connection.readyState === 0) {
+      console.log('Connecting to MongoDB...');
+      await mongoose.connect(MONGO_URI, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      });
+    } else {
+      console.log('Waiting for active connection attempt to complete...');
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Connection wait timed out')), 5000);
+        const check = () => {
+          if (mongoose.connection.readyState === 1) {
+            clearTimeout(timeout);
+            resolve();
+          } else if (mongoose.connection.readyState === 0 || mongoose.connection.readyState === 3) {
+            clearTimeout(timeout);
+            reject(new Error('Connection failed or disconnected while waiting'));
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        setTimeout(check, 100);
+      });
+    }
+    next();
+  } catch (err) {
+    console.error('Failed to ensure database connection:', err);
+    res.status(500).json({ error: 'Database connection failed: ' + err.message });
+  }
+});
 
 // Expanded schema to store Telegram meta, ban status, BIRD balance, and daily quest/streak sync state
 const leaderboardSchema = new mongoose.Schema({
