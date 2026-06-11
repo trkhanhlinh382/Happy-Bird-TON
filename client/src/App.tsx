@@ -1532,9 +1532,9 @@ function App() {
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎉</div>
                 <h3 style={{ fontSize: '1.4rem', color: '#39e19c', fontWeight: 800, margin: '0 0 12px' }}>Rút Tiền Thành Công!</h3>
-                <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.9rem', lineHeight: '1.5', margin: '0 0 20px' }}>
+                {/* <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.9rem', lineHeight: '1.5', margin: '0 0 20px' }}>
                   Yêu cầu rút <strong>{withdrawAmount} BIRD</strong> đã được gửi lên mạng lưới TON thành công.
-                </p>
+                </p> */}
                 <div style={{ fontSize: '0.8rem', color: 'rgba(0, 210, 255, 0.8)', background: 'rgba(0, 210, 255, 0.05)', padding: '10px 14px', borderRadius: '12px', border: '1px solid rgba(0, 210, 255, 0.15)' }}>
                   Số dư khả dụng mới: <strong>{birdBalance} BIRD</strong>
                 </div>
