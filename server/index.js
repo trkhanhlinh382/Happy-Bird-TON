@@ -93,9 +93,33 @@ function sendTelegramMessage(chatId, text, botToken) {
   req.end();
 }
 
-// -------------------------------------------------------------------------
-// PUBLIC ENDPOINTS
-// -------------------------------------------------------------------------
+// Diagnostic endpoint to check connection state and env variables
+app.get('/api/diagnostics', async (req, res) => {
+  try {
+    const mongoUriRaw = process.env.MONGO_URI;
+    let mongoUriStatus = 'undefined';
+    let mongoUriObfuscated = '';
+    if (mongoUriRaw) {
+      mongoUriStatus = 'defined';
+      mongoUriObfuscated = mongoUriRaw.replace(/:([^@]+)@/, ':******@');
+    }
+
+    const envKeys = Object.keys(process.env).filter(key => 
+      key.includes('MONGO') || key.includes('URL') || key.includes('PORT') || key.includes('CONTRACT') || key.includes('MINTER')
+    );
+
+    res.json({
+      status: 'ok',
+      mongooseReadyState: mongoose.connection.readyState, // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+      mongoUriStatus,
+      mongoUriObfuscated,
+      envKeysPresent: envKeys,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Get top N leaderboard with optional tab time filtering and specific player rank calculation
 app.get('/api/leaderboard', async (req, res) => {
